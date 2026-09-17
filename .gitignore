@@ -1,0 +1,26 @@
+# Environment variables & secrets
+.env
+
+# Python runtime & virtual environments
+.venv/
+venv/
+ENV/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Pytest / Cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Database files
+data/*.db
+data/jobs.db
+*.db
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp

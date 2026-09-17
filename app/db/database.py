@@ -1,0 +1,226 @@
+"""
+SQLite database interface and operations for job storage.
+"""
+
+import os
+import sqlite3
+from datetime import datetime, timezone
+from typing import List, Optional, Tuple
+from app.db.models import Job
+
+
+def get_connection(db_path: str = "data/jobs.db") -> sqlite3.Connection:
+    """Creates SQLite connection with row factory set to Row."""
+    if db_path != ":memory:":
+        db_dir = os.path.dirname(db_path)
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def initialize_database(db_path: str = "data/jobs.db") -> sqlite3.Connection:
+    """
+    Initializes the SQLite database and creates the jobs table if it does not exist.
+    """
+    conn = get_connection(db_path)
+    with conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS jobs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source TEXT NOT NULL,
+                source_job_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                company TEXT,
+                location TEXT,
+                description TEXT,
+                url TEXT,
+                created_at TEXT,
+                fetched_at TEXT NOT NULL,
+                salary_min REAL,
+                salary_max REAL,
+                salary_currency TEXT,
+                employment_type TEXT,
+                category TEXT,
+                fingerprint TEXT,
+                first_seen_at TEXT NOT NULL,
+                last_seen_at TEXT NOT NULL,
+                UNIQUE(source, source_job_id)
+            );
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_jobs_source_id ON jobs(source, source_job_id);
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_jobs_fingerprint ON jobs(fingerprint);
+            """
+        )
+    return conn
+
+
+def _row_to_job(row: sqlite3.Row) -> Job:
+    """Converts a SQLite Row object to a Job model instance."""
+    return Job(
+        source=row["source"],
+        source_job_id=row["source_job_id"],
+        title=row["title"],
+        company=row["company"] or "",
+        location=row["location"] or "",
+        description=row["description"] or "",
+        url=row["url"] or "",
+        created_at=row["created_at"],
+        fetched_at=row["fetched_at"],
+        salary_min=row["salary_min"],
+        salary_max=row["salary_max"],
+        salary_currency=row["salary_currency"],
+        employment_type=row["employment_type"],
+        category=row["category"],
+        fingerprint=row["fingerprint"],
+        first_seen_at=row["first_seen_at"],
+        last_seen_at=row["last_seen_at"],
+    )
+
+
+def job_exists(conn: sqlite3.Connection, source: str, source_job_id: str) -> bool:
+    """Checks if a job exists by source and source_job_id."""
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT 1 FROM jobs WHERE source = ? AND source_job_id = ? LIMIT 1",
+        (source, source_job_id),
+    )
+    return cursor.fetchone() is not None
+
+
+def get_job_by_source_id(
+    conn: sqlite3.Connection, source: str, source_job_id: str
+) -> Optional[Job]:
+    """Retrieves a job by source and source_job_id."""
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT * FROM jobs WHERE source = ? AND source_job_id = ? LIMIT 1",
+        (source, source_job_id),
+    )
+    row = cursor.fetchone()
+    if row:
+        return _row_to_job(row)
+    return None
+
+
+def update_last_seen(
+    conn: sqlite3.Connection,
+    source: str,
+    source_job_id: str,
+    seen_timestamp: Optional[str] = None,
+) -> bool:
+    """
+    Updates the last_seen_at timestamp for an existing job without modifying first_seen_at.
+    """
+    if seen_timestamp is None:
+        seen_timestamp = datetime.now(timezone.utc).isoformat()
+    with conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE jobs
+            SET last_seen_at = ?
+            WHERE source = ? AND source_job_id = ?
+            """,
+            (seen_timestamp, source, source_job_id),
+        )
+        return cursor.rowcount > 0
+
+
+def insert_job(conn: sqlite3.Connection, job: Job) -> bool:
+    """
+    Inserts a new job or updates last_seen_at if the job already exists.
+
+    Returns:
+        bool: True if inserted as a new job, False if job already existed and was updated.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    seen_time = job.fetched_at or now
+
+    if job_exists(conn, job.source, job.source_job_id):
+        update_last_seen(conn, job.source, job.source_job_id, seen_time)
+        return False
+
+    first_seen = job.first_seen_at or seen_time
+    last_seen = job.last_seen_at or seen_time
+
+    with conn:
+        conn.execute(
+            """
+            INSERT INTO jobs (
+                source, source_job_id, title, company, location, description, url,
+                created_at, fetched_at, salary_min, salary_max, salary_currency,
+                employment_type, category, fingerprint, first_seen_at, last_seen_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                job.source,
+                job.source_job_id,
+                job.title,
+                job.company,
+                job.location,
+                job.description,
+                job.url,
+                job.created_at,
+                job.fetched_at,
+                job.salary_min,
+                job.salary_max,
+                job.salary_currency,
+                job.employment_type,
+                job.category,
+                job.fingerprint,
+                first_seen,
+                last_seen,
+            ),
+        )
+    return True
+
+
+def insert_jobs(conn: sqlite3.Connection, jobs: List[Job]) -> Tuple[int, int]:
+    """
+    Inserts a list of jobs into the database.
+
+    Returns:
+        Tuple[int, int]: (new_jobs_count, existing_jobs_count)
+    """
+    new_count = 0
+    existing_count = 0
+    for job in jobs:
+        if insert_job(conn, job):
+            new_count += 1
+        else:
+            existing_count += 1
+    return new_count, existing_count
+
+
+def get_new_jobs(
+    conn: sqlite3.Connection, since_timestamp: Optional[str] = None
+) -> List[Job]:
+    """Retrieves jobs where first_seen_at >= since_timestamp."""
+    cursor = conn.cursor()
+    if since_timestamp:
+        cursor.execute(
+            "SELECT * FROM jobs WHERE first_seen_at >= ? ORDER BY first_seen_at DESC",
+            (since_timestamp,),
+        )
+    else:
+        cursor.execute("SELECT * FROM jobs ORDER BY first_seen_at DESC")
+    return [_row_to_job(row) for row in cursor.fetchall()]
+
+
+def get_recent_jobs(conn: sqlite3.Connection, limit: int = 50) -> List[Job]:
+    """Retrieves the most recently observed jobs ordered by last_seen_at DESC."""
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT * FROM jobs ORDER BY last_seen_at DESC LIMIT ?", (limit,)
+    )
+    return [_row_to_job(row) for row in cursor.fetchall()]
