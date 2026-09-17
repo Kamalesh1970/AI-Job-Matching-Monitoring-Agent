@@ -1,12 +1,12 @@
 """
-SQLite database interface and operations for job storage and match results.
+SQLite database interface and operations for job storage, match results, and notification tracking.
 """
 
 import json
 import os
 import sqlite3
 from datetime import datetime, timezone
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from app.db.models import Job, MatchResult
 
@@ -24,7 +24,7 @@ def get_connection(db_path: str = "data/jobs.db") -> sqlite3.Connection:
 
 def initialize_database(db_path: str = "data/jobs.db") -> sqlite3.Connection:
     """
-    Initializes the SQLite database and creates jobs and job_matches tables.
+    Initializes the SQLite database and creates jobs, job_matches, and job_notifications tables.
     """
     conn = get_connection(db_path)
     with conn:
@@ -80,6 +80,23 @@ def initialize_database(db_path: str = "data/jobs.db") -> sqlite3.Connection:
                 FOREIGN KEY(job_id) REFERENCES jobs(id) ON DELETE CASCADE,
                 UNIQUE(job_id)
             );
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS job_notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id INTEGER NOT NULL,
+                notification_type TEXT NOT NULL,
+                sent_at TEXT NOT NULL,
+                FOREIGN KEY(job_id) REFERENCES jobs(id) ON DELETE CASCADE,
+                UNIQUE(job_id, notification_type)
+            );
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_notifications_job_type ON job_notifications(job_id, notification_type);
             """
         )
     return conn
@@ -232,6 +249,12 @@ def get_all_jobs(conn: sqlite3.Connection) -> List[Job]:
     return [_row_to_job(row) for row in cursor.fetchall()]
 
 
+def get_jobs_map(conn: sqlite3.Connection) -> Dict[int, Job]:
+    """Retrieves a dictionary mapping job_id to Job object."""
+    jobs = get_all_jobs(conn)
+    return {job.id: job for job in jobs if job.id is not None}
+
+
 def get_new_jobs(
     conn: sqlite3.Connection, since_timestamp: Optional[str] = None
 ) -> List[Job]:
@@ -343,3 +366,44 @@ def get_stored_matches(conn: sqlite3.Connection) -> List[MatchResult]:
             )
         )
     return results
+
+
+def get_notified_job_ids(
+    conn: sqlite3.Connection, notification_type: str = "telegram_digest"
+) -> Set[int]:
+    """
+    Retrieves the set of job_ids that have already been notified for a given notification type.
+    """
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT job_id FROM job_notifications WHERE notification_type = ?",
+        (notification_type,),
+    )
+    return {row["job_id"] for row in cursor.fetchall()}
+
+
+def record_notifications(
+    conn: sqlite3.Connection,
+    job_ids: List[int],
+    notification_type: str = "telegram_digest",
+) -> int:
+    """
+    Records successful notification delivery for a list of job IDs.
+    """
+    if not job_ids:
+        return 0
+
+    now = datetime.now(timezone.utc).isoformat()
+    inserted_count = 0
+    with conn:
+        for job_id in job_ids:
+            cursor = conn.execute(
+                """
+                INSERT OR IGNORE INTO job_notifications (job_id, notification_type, sent_at)
+                VALUES (?, ?, ?)
+                """,
+                (job_id, notification_type, now),
+            )
+            if cursor.rowcount > 0:
+                inserted_count += 1
+    return inserted_count

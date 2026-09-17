@@ -1,20 +1,27 @@
 """
-Main entry point for Phase 1 (Ingestion) & Phase 2 (Resume Matching Engine).
+Main entry point for Phase 1 (Ingestion), Phase 2 (Resume Matching), and Phase 3 (Telegram Digest).
 """
 
-import sys
+import argparse
 import logging
-from typing import List, Optional
+import sys
+from typing import Dict, List, Optional
 
-from app.config import load_config, Config
+from app.config import Config, load_config
 from app.db.database import (
     get_all_jobs,
+    get_jobs_map,
+    get_notified_job_ids,
+    get_stored_matches,
     initialize_database,
     insert_job,
+    record_notifications,
     save_match_results,
 )
 from app.db.models import Job, MatchResult
+from app.services.digest_service import DigestService
 from app.services.matching_service import MatchingService
+from app.services.telegram_notifier import TelegramNotifier
 from app.sources.adzuna import AdzunaJobSource
 
 
@@ -130,8 +137,101 @@ def print_match_results(matches: List[MatchResult], limit: int = 10):
     print("-" * 30 + "\n")
 
 
-def run_pipeline(config: Optional[Config] = None, run_matching: bool = True):
-    """Executes the Phase 1 Ingestion and Phase 2 Resume Matching pipelines."""
+def print_digest_summary(
+    jobs_analyzed: int,
+    eligible_matches: int,
+    already_notified: int,
+    new_notifications: int,
+    messages_sent: int,
+    failed_messages: int,
+):
+    """Prints Telegram Digest summary block as required by Phase 3 spec."""
+    print("\n" + "=" * 50)
+    print("TELEGRAM DIGEST")
+    print("=" * 50)
+    print(f"\nJobs analyzed: {jobs_analyzed}")
+    print(f"Eligible matches: {eligible_matches}")
+    print(f"Already notified: {already_notified}")
+    print(f"New notifications: {new_notifications}")
+    print(f"Messages sent: {messages_sent}")
+    print(f"Failed messages: {failed_messages}")
+    print("\n" + "=" * 50 + "\n")
+
+
+def run_telegram_digest_step(
+    config: Config,
+    conn,
+    matches: List[MatchResult],
+    jobs_map: Dict[int, Job],
+    notifier: Optional[TelegramNotifier] = None,
+):
+    """
+    Executes Phase 3 Telegram digest formatting, sending, and notification recording.
+    """
+    logger = logging.getLogger("app.main")
+    logger.info("Executing Phase 3 Telegram Daily Job Digest...")
+
+    if notifier is None:
+        notifier = TelegramNotifier(config=config)
+
+    digest_service = DigestService(config=config)
+
+    jobs_analyzed = len(matches)
+
+    # Filter eligible matches meeting threshold & not FILTERED
+    eligible = [
+        m
+        for m in matches
+        if m.final_score >= config.telegram_min_match_score
+        and m.match_status != "FILTERED"
+    ]
+    eligible_matches_count = len(eligible)
+
+    # Retrieve already notified job IDs
+    notified_set = get_notified_job_ids(conn, notification_type="telegram_digest")
+
+    already_notified_count = sum(1 for m in eligible if m.job_id in notified_set)
+    unnotified_matches = [m for m in eligible if m.job_id not in notified_set]
+    new_notifications_count = len(unnotified_matches)
+
+    # Generate digest chunks
+    chunks = digest_service.build_digest_chunks(
+        matches=unnotified_matches, jobs_map=jobs_map
+    )
+
+    messages_sent = 0
+    failed_messages = 0
+
+    for chunk in chunks:
+        success = notifier.send_message(chunk.text)
+        if success:
+            messages_sent += 1
+            record_notifications(
+                conn, chunk.job_ids, notification_type="telegram_digest"
+            )
+        else:
+            failed_messages += 1
+
+    print_digest_summary(
+        jobs_analyzed=jobs_analyzed,
+        eligible_matches=eligible_matches_count,
+        already_notified=already_notified_count,
+        new_notifications=new_notifications_count,
+        messages_sent=messages_sent,
+        failed_messages=failed_messages,
+    )
+
+
+def run_pipeline(
+    config: Optional[Config] = None,
+    run_ingestion: bool = True,
+    run_matching: bool = True,
+    run_digest: bool = False,
+    notifier: Optional[TelegramNotifier] = None,
+):
+    """
+    Executes the pipeline (Ingestion, Resume Matching, and Telegram Digest).
+    """
     setup_logging()
     logger = logging.getLogger("app.main")
     logger.info("Starting AI Job-Matching & Monitoring Agent pipeline...")
@@ -149,61 +249,63 @@ def run_pipeline(config: Optional[Config] = None, run_matching: bool = True):
     # ----------------------------------------------------
     # Phase 1: Ingestion
     # ----------------------------------------------------
-    adzuna_source = AdzunaJobSource(
-        app_id=config.adzuna_app_id,
-        app_key=config.adzuna_app_key,
-        country=config.adzuna_country,
-    )
-
-    total_keywords = len(config.keywords)
-    jobs_fetched_count = 0
-    new_jobs_list: List[Job] = []
-    existing_jobs_count = 0
-    failed_requests_count = 0
-
-    for idx, keyword in enumerate(config.keywords, start=1):
-        logger.info(
-            "[%d/%d] Processing search keyword: '%s'", idx, total_keywords, keyword
+    if run_ingestion:
+        adzuna_source = AdzunaJobSource(
+            app_id=config.adzuna_app_id,
+            app_key=config.adzuna_app_key,
+            country=config.adzuna_country,
         )
-        try:
-            jobs, success = adzuna_source.fetch_jobs_for_keyword(
-                keyword=keyword,
-                max_pages=config.adzuna_max_pages,
-                results_per_page=config.adzuna_results_per_page,
-            )
 
-            if not success:
+        total_keywords = len(config.keywords)
+        jobs_fetched_count = 0
+        new_jobs_list: List[Job] = []
+        existing_jobs_count = 0
+        failed_requests_count = 0
+
+        for idx, keyword in enumerate(config.keywords, start=1):
+            logger.info(
+                "[%d/%d] Processing search keyword: '%s'", idx, total_keywords, keyword
+            )
+            try:
+                jobs, success = adzuna_source.fetch_jobs_for_keyword(
+                    keyword=keyword,
+                    max_pages=config.adzuna_max_pages,
+                    results_per_page=config.adzuna_results_per_page,
+                )
+
+                if not success:
+                    failed_requests_count += 1
+
+                jobs_fetched_count += len(jobs)
+
+                for job in jobs:
+                    is_new = insert_job(conn, job)
+                    if is_new:
+                        new_jobs_list.append(job)
+                    else:
+                        existing_jobs_count += 1
+
+            except Exception as e:
+                logger.error("Error processing keyword '%s': %s", keyword, str(e))
                 failed_requests_count += 1
 
-            jobs_fetched_count += len(jobs)
-
-            for job in jobs:
-                is_new = insert_job(conn, job)
-                if is_new:
-                    new_jobs_list.append(job)
-                else:
-                    existing_jobs_count += 1
-
-        except Exception as e:
-            logger.error("Error processing keyword '%s': %s", keyword, str(e))
-            failed_requests_count += 1
-
-    print_new_jobs(new_jobs_list)
-    print_ingestion_summary(
-        total_keywords=total_keywords,
-        jobs_fetched=jobs_fetched_count,
-        new_jobs_count=len(new_jobs_list),
-        existing_jobs_count=existing_jobs_count,
-        failed_requests_count=failed_requests_count,
-    )
+        print_new_jobs(new_jobs_list)
+        print_ingestion_summary(
+            total_keywords=total_keywords,
+            jobs_fetched=jobs_fetched_count,
+            new_jobs_count=len(new_jobs_list),
+            existing_jobs_count=existing_jobs_count,
+            failed_requests_count=failed_requests_count,
+        )
 
     # ----------------------------------------------------
     # Phase 2: Resume Matching Engine
     # ----------------------------------------------------
+    match_results: List[MatchResult] = []
+    all_stored_jobs = get_all_jobs(conn)
+
     if run_matching:
         logger.info("Executing Phase 2 Resume Matching Engine...")
-        all_stored_jobs = get_all_jobs(conn)
-
         if not all_stored_jobs:
             logger.warning("No jobs stored in database to match against.")
         else:
@@ -220,10 +322,58 @@ def run_pipeline(config: Optional[Config] = None, run_matching: bool = True):
                 logger.warning("Skipping matching: %s", str(e))
             except Exception as e:
                 logger.error("Error during match evaluation: %s", str(e), exc_info=True)
+    else:
+        match_results = get_stored_matches(conn)
+
+    # ----------------------------------------------------
+    # Phase 3: Telegram Digest
+    # ----------------------------------------------------
+    if run_digest:
+        jobs_map = get_jobs_map(conn)
+        run_telegram_digest_step(
+            config=config,
+            conn=conn,
+            matches=match_results,
+            jobs_map=jobs_map,
+            notifier=notifier,
+        )
 
     conn.close()
     logger.info("Pipeline execution completed successfully.")
 
 
+def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
+    """Parses command-line flags."""
+    parser = argparse.ArgumentParser(
+        description="AI Job-Matching & Monitoring Agent"
+    )
+    parser.add_argument(
+        "--digest",
+        action="store_true",
+        help="Run Phase 3 Telegram daily job digest",
+    )
+    parser.add_argument(
+        "--skip-ingestion",
+        action="store_true",
+        help="Skip Phase 1 job fetching from Adzuna",
+    )
+    parser.add_argument(
+        "--skip-matching",
+        action="store_true",
+        help="Skip Phase 2 job matching computation",
+    )
+    return parser.parse_args(args)
+
+
+def main():
+    """CLI entry point."""
+    parsed = parse_args()
+    run_pipeline(
+        run_ingestion=not parsed.skip_ingestion,
+        run_matching=not parsed.skip_matching,
+        run_digest=parsed.digest,
+    )
+
+
 if __name__ == "__main__":
-    run_pipeline()
+    main()

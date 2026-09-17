@@ -55,6 +55,12 @@ class Config:
     preferred_locations: List[str] = field(
         default_factory=lambda: list(DEFAULT_PREFERRED_LOCATIONS)
     )
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
+    telegram_min_match_score: float = 70.0
+    telegram_max_jobs_per_digest: int = 10
+    telegram_enabled: bool = False
+    send_empty_digest: bool = False
 
     def __post_init__(self):
         """Validate matching weights sum up to 1.0."""
@@ -141,6 +147,27 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
     else:
         preferred_locations = list(DEFAULT_PREFERRED_LOCATIONS)
 
+    telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+
+    try:
+        telegram_min_match_score = float(os.getenv("TELEGRAM_MIN_MATCH_SCORE", "70.0"))
+    except ValueError:
+        telegram_min_match_score = 70.0
+
+    try:
+        telegram_max_jobs_per_digest = int(os.getenv("TELEGRAM_MAX_JOBS_PER_DIGEST", "10"))
+    except ValueError:
+        telegram_max_jobs_per_digest = 10
+
+    tg_enabled_env = os.getenv("TELEGRAM_ENABLED", "true").strip().lower()
+    telegram_enabled = (
+        bool(telegram_bot_token and telegram_chat_id)
+        and tg_enabled_env in ("true", "1", "yes")
+    )
+
+    send_empty_digest = os.getenv("SEND_EMPTY_DIGEST", "false").strip().lower() in ("true", "1", "yes")
+
     return Config(
         adzuna_app_id=app_id,
         adzuna_app_key=app_key,
@@ -156,4 +183,10 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
         rule_weight=rule_weight,
         min_match_score=min_match_score,
         preferred_locations=preferred_locations,
+        telegram_bot_token=telegram_bot_token,
+        telegram_chat_id=telegram_chat_id,
+        telegram_min_match_score=telegram_min_match_score,
+        telegram_max_jobs_per_digest=telegram_max_jobs_per_digest,
+        telegram_enabled=telegram_enabled,
+        send_empty_digest=send_empty_digest,
     )
