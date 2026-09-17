@@ -36,17 +36,23 @@ class Config:
     keywords: List[str] = field(default_factory=lambda: list(DEFAULT_SEARCH_KEYWORDS))
 
 
-def load_config(env_path: str = None) -> Config:
+def load_config(env_path: str = None, load_env_file: bool = True) -> Config:
     """
     Loads configuration from environment variables or .env file.
+
+    Args:
+        env_path: Optional path to a specific .env file.
+        load_env_file: If True, loads variables from .env file into os.environ.
+                      Set to False during unit tests to test environment variables in isolation.
 
     Raises:
         ValueError: If required API credentials (ADZUNA_APP_ID or ADZUNA_APP_KEY) are missing.
     """
-    if env_path:
-        load_dotenv(dotenv_path=env_path)
-    else:
-        load_dotenv()
+    if load_env_file:
+        if env_path:
+            load_dotenv(dotenv_path=env_path)
+        else:
+            load_dotenv()
 
     app_id = os.getenv("ADZUNA_APP_ID", "").strip()
     app_key = os.getenv("ADZUNA_APP_KEY", "").strip()
