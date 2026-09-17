@@ -1,5 +1,7 @@
 """
-Main entry point for Phase 1 (Ingestion), Phase 2 (Resume Matching), and Phase 3 (Telegram Digest).
+Main entry point for AI Job-Matching & Monitoring Agent.
+Supports Phase 1 Ingestion, Phase 2 Resume Matching, Phase 3 Telegram Digest,
+and Phase 4 Scheduled Monitoring & Heartbeat Service.
 """
 
 import argparse
@@ -19,8 +21,10 @@ from app.db.database import (
     save_match_results,
 )
 from app.db.models import Job, MatchResult
+from app.scheduler.scheduler import PipelineScheduler
 from app.services.digest_service import DigestService
 from app.services.matching_service import MatchingService
+from app.services.pipeline_service import PipelineService
 from app.services.telegram_notifier import TelegramNotifier
 from app.sources.adzuna import AdzunaJobSource
 
@@ -175,10 +179,8 @@ def run_telegram_digest_step(
         notifier = TelegramNotifier(config=config)
 
     digest_service = DigestService(config=config)
-
     jobs_analyzed = len(matches)
 
-    # Filter eligible matches meeting threshold & not FILTERED
     eligible = [
         m
         for m in matches
@@ -187,14 +189,11 @@ def run_telegram_digest_step(
     ]
     eligible_matches_count = len(eligible)
 
-    # Retrieve already notified job IDs
     notified_set = get_notified_job_ids(conn, notification_type="telegram_digest")
-
     already_notified_count = sum(1 for m in eligible if m.job_id in notified_set)
     unnotified_matches = [m for m in eligible if m.job_id not in notified_set]
     new_notifications_count = len(unnotified_matches)
 
-    # Generate digest chunks
     chunks = digest_service.build_digest_chunks(
         matches=unnotified_matches, jobs_map=jobs_map
     )
@@ -348,6 +347,16 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         description="AI Job-Matching & Monitoring Agent"
     )
     parser.add_argument(
+        "--scheduler",
+        action="store_true",
+        help="Run Phase 4 long-running scheduled monitoring daemon",
+    )
+    parser.add_argument(
+        "--run-once",
+        action="store_true",
+        help="Run one complete monitoring pipeline cycle and exit",
+    )
+    parser.add_argument(
         "--digest",
         action="store_true",
         help="Run Phase 3 Telegram daily job digest",
@@ -367,12 +376,37 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
 
 def main():
     """CLI entry point."""
+    setup_logging()
     parsed = parse_args()
-    run_pipeline(
-        run_ingestion=not parsed.skip_ingestion,
-        run_matching=not parsed.skip_matching,
-        run_digest=parsed.digest,
-    )
+
+    try:
+        config = load_config()
+    except ValueError as e:
+        logging.error("Configuration error: %s", str(e))
+        sys.exit(1)
+
+    if parsed.scheduler:
+        logger = logging.getLogger("app.main")
+        logger.info("Launching Phase 4 Scheduled Monitoring Service daemon...")
+        pipeline_scheduler = PipelineScheduler(config=config)
+        pipeline_scheduler.start(block=True)
+
+    elif parsed.run_once:
+        pipeline_service = PipelineService(config=config)
+        pipeline_service.run_monitoring_pipeline(config=config)
+
+    elif parsed.digest or parsed.skip_ingestion or parsed.skip_matching:
+        run_pipeline(
+            config=config,
+            run_ingestion=not parsed.skip_ingestion,
+            run_matching=not parsed.skip_matching,
+            run_digest=parsed.digest,
+        )
+
+    else:
+        # Default behavior: run one complete monitoring pipeline cycle
+        pipeline_service = PipelineService(config=config)
+        pipeline_service.run_monitoring_pipeline(config=config)
 
 
 if __name__ == "__main__":

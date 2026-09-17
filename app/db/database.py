@@ -1,5 +1,6 @@
 """
-SQLite database interface and operations for job storage, match results, and notification tracking.
+SQLite database interface and operations for job storage, match results, notification tracking,
+pipeline run history, and operational health alerts.
 """
 
 import json
@@ -24,7 +25,8 @@ def get_connection(db_path: str = "data/jobs.db") -> sqlite3.Connection:
 
 def initialize_database(db_path: str = "data/jobs.db") -> sqlite3.Connection:
     """
-    Initializes the SQLite database and creates jobs, job_matches, and job_notifications tables.
+    Initializes the SQLite database and creates jobs, job_matches, job_notifications,
+    pipeline_runs, and health_alerts tables.
     """
     conn = get_connection(db_path)
     with conn:
@@ -97,6 +99,49 @@ def initialize_database(db_path: str = "data/jobs.db") -> sqlite3.Connection:
         conn.execute(
             """
             CREATE INDEX IF NOT EXISTS idx_notifications_job_type ON job_notifications(job_id, notification_type);
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS pipeline_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                started_at TEXT NOT NULL,
+                finished_at TEXT,
+                status TEXT NOT NULL,
+                jobs_fetched INTEGER DEFAULT 0,
+                new_jobs INTEGER DEFAULT 0,
+                existing_jobs INTEGER DEFAULT 0,
+                matches_found INTEGER DEFAULT 0,
+                eligible_notifications INTEGER DEFAULT 0,
+                notifications_sent INTEGER DEFAULT 0,
+                failed_sources INTEGER DEFAULT 0,
+                error_message TEXT
+            );
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_pipeline_runs_started ON pipeline_runs(started_at);
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_pipeline_runs_status ON pipeline_runs(status);
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS health_alerts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                alert_type TEXT NOT NULL,
+                sent_at TEXT NOT NULL,
+                resolved_at TEXT
+            );
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_health_alerts_type ON health_alerts(alert_type);
             """
         )
     return conn
@@ -407,3 +452,188 @@ def record_notifications(
             if cursor.rowcount > 0:
                 inserted_count += 1
     return inserted_count
+
+
+# ---------------------------------------------------------------------
+# Phase 4: Pipeline Run Tracking & Operational Health Alert DB Functions
+# ---------------------------------------------------------------------
+
+
+def record_pipeline_start(
+    conn: sqlite3.Connection, started_at: Optional[str] = None
+) -> int:
+    """
+    Records the start of a monitoring pipeline run with status RUNNING.
+
+    Returns:
+        int: The inserted pipeline run ID.
+    """
+    if not started_at:
+        started_at = datetime.now(timezone.utc).isoformat()
+
+    with conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO pipeline_runs (started_at, status)
+            VALUES (?, ?)
+            """,
+            (started_at, "RUNNING"),
+        )
+        return cursor.lastrowid
+
+
+def record_pipeline_finish(
+    conn: sqlite3.Connection,
+    run_id: int,
+    status: str,
+    finished_at: Optional[str] = None,
+    jobs_fetched: int = 0,
+    new_jobs: int = 0,
+    existing_jobs: int = 0,
+    matches_found: int = 0,
+    eligible_notifications: int = 0,
+    notifications_sent: int = 0,
+    failed_sources: int = 0,
+    error_message: Optional[str] = None,
+) -> bool:
+    """
+    Updates an existing pipeline_runs record upon completion or failure.
+    """
+    if not finished_at:
+        finished_at = datetime.now(timezone.utc).isoformat()
+
+    with conn:
+        cursor = conn.execute(
+            """
+            UPDATE pipeline_runs
+            SET finished_at = ?,
+                status = ?,
+                jobs_fetched = ?,
+                new_jobs = ?,
+                existing_jobs = ?,
+                matches_found = ?,
+                eligible_notifications = ?,
+                notifications_sent = ?,
+                failed_sources = ?,
+                error_message = ?
+            WHERE id = ?
+            """,
+            (
+                finished_at,
+                status,
+                jobs_fetched,
+                new_jobs,
+                existing_jobs,
+                matches_found,
+                eligible_notifications,
+                notifications_sent,
+                failed_sources,
+                error_message,
+                run_id,
+            ),
+        )
+        return cursor.rowcount > 0
+
+
+def get_last_pipeline_run(conn: sqlite3.Connection) -> Optional[dict]:
+    """
+    Retrieves the most recent pipeline run record.
+    """
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT * FROM pipeline_runs ORDER BY id DESC LIMIT 1"
+    )
+    row = cursor.fetchone()
+    if row:
+        return dict(row)
+    return None
+
+
+def get_last_successful_pipeline_run(conn: sqlite3.Connection) -> Optional[dict]:
+    """
+    Retrieves the most recent pipeline run record with status 'SUCCESS' or 'PARTIAL_FAILURE'.
+    """
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT * FROM pipeline_runs
+        WHERE status IN ('SUCCESS', 'PARTIAL_FAILURE')
+        ORDER BY id DESC LIMIT 1
+        """
+    )
+    row = cursor.fetchone()
+    if row:
+        return dict(row)
+    return None
+
+
+def record_health_alert(
+    conn: sqlite3.Connection,
+    alert_type: str = "stale_pipeline",
+    sent_at: Optional[str] = None,
+) -> int:
+    """
+    Records an unresolved operational health alert.
+
+    Returns:
+        int: Inserted alert record ID.
+    """
+    if not sent_at:
+        sent_at = datetime.now(timezone.utc).isoformat()
+
+    with conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO health_alerts (alert_type, sent_at)
+            VALUES (?, ?)
+            """,
+            (alert_type, sent_at),
+        )
+        return cursor.lastrowid
+
+
+def get_unresolved_health_alert(
+    conn: sqlite3.Connection, alert_type: str = "stale_pipeline"
+) -> Optional[dict]:
+    """
+    Retrieves an active unresolved health alert for a given alert type.
+    """
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT * FROM health_alerts
+        WHERE alert_type = ? AND resolved_at IS NULL
+        ORDER BY id DESC LIMIT 1
+        """,
+        (alert_type,),
+    )
+    row = cursor.fetchone()
+    if row:
+        return dict(row)
+    return None
+
+
+def resolve_health_alerts(
+    conn: sqlite3.Connection,
+    alert_type: str = "stale_pipeline",
+    resolved_at: Optional[str] = None,
+) -> int:
+    """
+    Marks all unresolved health alerts of a given type as resolved.
+
+    Returns:
+        int: Number of resolved alert records.
+    """
+    if not resolved_at:
+        resolved_at = datetime.now(timezone.utc).isoformat()
+
+    with conn:
+        cursor = conn.execute(
+            """
+            UPDATE health_alerts
+            SET resolved_at = ?
+            WHERE alert_type = ? AND resolved_at IS NULL
+            """,
+            (resolved_at, alert_type),
+        )
+        return cursor.rowcount

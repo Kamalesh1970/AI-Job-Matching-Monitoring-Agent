@@ -61,6 +61,10 @@ class Config:
     telegram_max_jobs_per_digest: int = 10
     telegram_enabled: bool = False
     send_empty_digest: bool = False
+    scheduler_enabled: bool = True
+    scheduler_interval_minutes: int = 60
+    heartbeat_timeout_minutes: int = 180
+    run_on_startup: bool = True
 
     def __post_init__(self):
         """Validate matching weights sum up to 1.0."""
@@ -168,6 +172,22 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
 
     send_empty_digest = os.getenv("SEND_EMPTY_DIGEST", "false").strip().lower() in ("true", "1", "yes")
 
+    scheduler_enabled_env = os.getenv("SCHEDULER_ENABLED", "true").strip().lower()
+    scheduler_enabled = scheduler_enabled_env in ("true", "1", "yes")
+
+    try:
+        scheduler_interval_minutes = int(os.getenv("SCHEDULER_INTERVAL_MINUTES", "60"))
+    except ValueError:
+        scheduler_interval_minutes = 60
+
+    try:
+        heartbeat_timeout_minutes = int(os.getenv("HEARTBEAT_TIMEOUT_MINUTES", "180"))
+    except ValueError:
+        heartbeat_timeout_minutes = 180
+
+    run_on_startup_env = os.getenv("RUN_ON_STARTUP", "true").strip().lower()
+    run_on_startup = run_on_startup_env in ("true", "1", "yes")
+
     return Config(
         adzuna_app_id=app_id,
         adzuna_app_key=app_key,
@@ -189,4 +209,8 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
         telegram_max_jobs_per_digest=telegram_max_jobs_per_digest,
         telegram_enabled=telegram_enabled,
         send_empty_digest=send_empty_digest,
+        scheduler_enabled=scheduler_enabled,
+        scheduler_interval_minutes=scheduler_interval_minutes,
+        heartbeat_timeout_minutes=heartbeat_timeout_minutes,
+        run_on_startup=run_on_startup,
     )
