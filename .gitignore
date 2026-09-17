@@ -1,6 +1,10 @@
 # Environment variables & secrets
 .env
 
+# User resume directory (privacy)
+data/resume/*
+!data/resume/.gitkeep
+
 # Python runtime & virtual environments
 .venv/
 venv/
@@ -10,7 +14,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Pytest / Cache
+# Model caches & Pytest / Coverage
+.cache/
+huggingface/
 .pytest_cache/
 .coverage
 htmlcov/

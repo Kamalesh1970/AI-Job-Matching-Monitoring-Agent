@@ -1,12 +1,14 @@
 """
-SQLite database interface and operations for job storage.
+SQLite database interface and operations for job storage and match results.
 """
 
+import json
 import os
 import sqlite3
 from datetime import datetime, timezone
 from typing import List, Optional, Tuple
-from app.db.models import Job
+
+from app.db.models import Job, MatchResult
 
 
 def get_connection(db_path: str = "data/jobs.db") -> sqlite3.Connection:
@@ -22,7 +24,7 @@ def get_connection(db_path: str = "data/jobs.db") -> sqlite3.Connection:
 
 def initialize_database(db_path: str = "data/jobs.db") -> sqlite3.Connection:
     """
-    Initializes the SQLite database and creates the jobs table if it does not exist.
+    Initializes the SQLite database and creates jobs and job_matches tables.
     """
     conn = get_connection(db_path)
     with conn:
@@ -61,12 +63,32 @@ def initialize_database(db_path: str = "data/jobs.db") -> sqlite3.Connection:
             CREATE INDEX IF NOT EXISTS idx_jobs_fingerprint ON jobs(fingerprint);
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS job_matches (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id INTEGER NOT NULL,
+                similarity_score REAL NOT NULL,
+                skill_score REAL NOT NULL,
+                rule_score REAL NOT NULL,
+                final_score REAL NOT NULL,
+                match_status TEXT NOT NULL,
+                matched_skills TEXT,
+                missing_skills TEXT,
+                reasons TEXT,
+                calculated_at TEXT NOT NULL,
+                FOREIGN KEY(job_id) REFERENCES jobs(id) ON DELETE CASCADE,
+                UNIQUE(job_id)
+            );
+            """
+        )
     return conn
 
 
 def _row_to_job(row: sqlite3.Row) -> Job:
     """Converts a SQLite Row object to a Job model instance."""
     return Job(
+        id=row["id"] if "id" in row.keys() else None,
         source=row["source"],
         source_job_id=row["source_job_id"],
         title=row["title"],
@@ -154,7 +176,7 @@ def insert_job(conn: sqlite3.Connection, job: Job) -> bool:
     last_seen = job.last_seen_at or seen_time
 
     with conn:
-        conn.execute(
+        cursor = conn.execute(
             """
             INSERT INTO jobs (
                 source, source_job_id, title, company, location, description, url,
@@ -182,6 +204,7 @@ def insert_job(conn: sqlite3.Connection, job: Job) -> bool:
                 last_seen,
             ),
         )
+        job.id = cursor.lastrowid
     return True
 
 
@@ -200,6 +223,13 @@ def insert_jobs(conn: sqlite3.Connection, jobs: List[Job]) -> Tuple[int, int]:
         else:
             existing_count += 1
     return new_count, existing_count
+
+
+def get_all_jobs(conn: sqlite3.Connection) -> List[Job]:
+    """Retrieves all jobs stored in the database."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM jobs ORDER BY id ASC")
+    return [_row_to_job(row) for row in cursor.fetchall()]
 
 
 def get_new_jobs(
@@ -224,3 +254,92 @@ def get_recent_jobs(conn: sqlite3.Connection, limit: int = 50) -> List[Job]:
         "SELECT * FROM jobs ORDER BY last_seen_at DESC LIMIT ?", (limit,)
     )
     return [_row_to_job(row) for row in cursor.fetchall()]
+
+
+def save_match_result(conn: sqlite3.Connection, match: MatchResult) -> bool:
+    """
+    Saves or replaces a MatchResult record in the job_matches table.
+    """
+    if not match.job_id:
+        return False
+
+    with conn:
+        conn.execute(
+            """
+            INSERT INTO job_matches (
+                job_id, similarity_score, skill_score, rule_score, final_score,
+                match_status, matched_skills, missing_skills, reasons, calculated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(job_id) DO UPDATE SET
+                similarity_score=excluded.similarity_score,
+                skill_score=excluded.skill_score,
+                rule_score=excluded.rule_score,
+                final_score=excluded.final_score,
+                match_status=excluded.match_status,
+                matched_skills=excluded.matched_skills,
+                missing_skills=excluded.missing_skills,
+                reasons=excluded.reasons,
+                calculated_at=excluded.calculated_at
+            """,
+            (
+                match.job_id,
+                match.similarity_score,
+                match.skill_score,
+                match.rule_score,
+                match.final_score,
+                match.match_status,
+                json.dumps(match.matched_skills),
+                json.dumps(match.missing_skills),
+                json.dumps(match.reasons),
+                match.calculated_at,
+            ),
+        )
+    return True
+
+
+def save_match_results(conn: sqlite3.Connection, matches: List[MatchResult]) -> int:
+    """Saves multiple MatchResult records to the database."""
+    count = 0
+    for match in matches:
+        if save_match_result(conn, match):
+            count += 1
+    return count
+
+
+def get_stored_matches(conn: sqlite3.Connection) -> List[MatchResult]:
+    """
+    Retrieves stored match results joined with job details.
+    """
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT m.*, j.source_job_id, j.title, j.company, j.location
+        FROM job_matches m
+        JOIN jobs j ON m.job_id = j.id
+        ORDER BY m.final_score DESC
+        """
+    )
+    results = []
+    for row in cursor.fetchall():
+        matched_skills = json.loads(row["matched_skills"]) if row["matched_skills"] else []
+        missing_skills = json.loads(row["missing_skills"]) if row["missing_skills"] else []
+        reasons = json.loads(row["reasons"]) if row["reasons"] else []
+        results.append(
+            MatchResult(
+                job_id=row["job_id"],
+                source_job_id=row["source_job_id"],
+                title=row["title"],
+                company=row["company"] or "",
+                location=row["location"] or "",
+                similarity_score=row["similarity_score"],
+                skill_score=row["skill_score"],
+                rule_score=row["rule_score"],
+                final_score=row["final_score"],
+                match_status=row["match_status"],
+                matched_skills=matched_skills,
+                missing_skills=missing_skills,
+                reasons=reasons,
+                calculated_at=row["calculated_at"],
+            )
+        )
+    return results

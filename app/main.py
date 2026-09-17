@@ -1,5 +1,5 @@
 """
-Main entry point for Phase 1 of the AI Job-Matching & Monitoring Agent pipeline.
+Main entry point for Phase 1 (Ingestion) & Phase 2 (Resume Matching Engine).
 """
 
 import sys
@@ -7,8 +7,14 @@ import logging
 from typing import List, Optional
 
 from app.config import load_config, Config
-from app.db.database import initialize_database, insert_job
-from app.db.models import Job
+from app.db.database import (
+    get_all_jobs,
+    initialize_database,
+    insert_job,
+    save_match_results,
+)
+from app.db.models import Job, MatchResult
+from app.services.matching_service import MatchingService
 from app.sources.adzuna import AdzunaJobSource
 
 
@@ -57,14 +63,14 @@ def print_new_jobs(new_jobs: List[Job]):
         print("-" * 50)
 
 
-def print_summary(
+def print_ingestion_summary(
     total_keywords: int,
     jobs_fetched: int,
     new_jobs_count: int,
     existing_jobs_count: int,
     failed_requests_count: int,
 ):
-    """Prints execution summary table."""
+    """Prints job ingestion fetch summary table."""
     print("\nFetch summary")
     print("-" * 30)
     print(f"Search keywords: {total_keywords}")
@@ -75,11 +81,60 @@ def print_summary(
     print("-" * 30 + "\n")
 
 
-def run_pipeline(config: Optional[Config] = None):
-    """Executes the Phase 1 job ingestion pipeline."""
+def print_match_results(matches: List[MatchResult], limit: int = 10):
+    """Prints formatted job match cards to console."""
+    print("\n" + "=" * 50)
+    print("JOB MATCH RESULTS")
+    print("=" * 50)
+
+    if not matches:
+        print("No jobs found for match evaluation.\n")
+        return
+
+    display_matches = matches[:limit]
+    for idx, match in enumerate(display_matches, start=1):
+        matched_str = ", ".join(match.matched_skills) if match.matched_skills else "None"
+        missing_str = ", ".join(match.missing_skills) if match.missing_skills else "None"
+        skill_pct = int(match.skill_score * 100)
+
+        print(f"\n{idx}. {match.title}")
+        print(f"   Company: {match.company or 'Not specified'}")
+        print(f"   Location: {match.location or 'Not specified'}")
+        print()
+        print(f"   Match Score: {match.final_score:.1f}/100")
+        print(f"   Semantic Similarity: {match.similarity_score:.2f}")
+        print(f"   Skill Match: {skill_pct}%")
+        print()
+        print(f"   Matched Skills:\n   {matched_str}")
+        print()
+        print(f"   Missing Skills:\n   {missing_str}")
+        print()
+        print(f"   Experience: {match.experience_status}")
+        print(f"   Location: {match.location_status}")
+        print()
+        print(f"   Status: {match.match_status}")
+        if match.reasons:
+            print(f"   Reasons: {'; '.join(match.reasons)}")
+        print("-" * 50)
+
+    matches_count = sum(1 for m in matches if m.match_status == "MATCH")
+    partial_count = sum(1 for m in matches if m.match_status == "PARTIAL_MATCH")
+    filtered_count = sum(1 for m in matches if m.match_status == "FILTERED")
+
+    print("\nMatching summary")
+    print("-" * 30)
+    print(f"Total jobs analyzed: {len(matches)}")
+    print(f"Matches: {matches_count}")
+    print(f"Partial matches: {partial_count}")
+    print(f"Filtered: {filtered_count}")
+    print("-" * 30 + "\n")
+
+
+def run_pipeline(config: Optional[Config] = None, run_matching: bool = True):
+    """Executes the Phase 1 Ingestion and Phase 2 Resume Matching pipelines."""
     setup_logging()
     logger = logging.getLogger("app.main")
-    logger.info("Starting Phase 1 AI Job-Matching & Monitoring Agent pipeline...")
+    logger.info("Starting AI Job-Matching & Monitoring Agent pipeline...")
 
     if config is None:
         try:
@@ -91,6 +146,9 @@ def run_pipeline(config: Optional[Config] = None):
     logger.info("Initializing SQLite database at: %s", config.db_path)
     conn = initialize_database(config.db_path)
 
+    # ----------------------------------------------------
+    # Phase 1: Ingestion
+    # ----------------------------------------------------
     adzuna_source = AdzunaJobSource(
         app_id=config.adzuna_app_id,
         app_key=config.adzuna_app_key,
@@ -130,10 +188,8 @@ def run_pipeline(config: Optional[Config] = None):
             logger.error("Error processing keyword '%s': %s", keyword, str(e))
             failed_requests_count += 1
 
-    conn.close()
-
     print_new_jobs(new_jobs_list)
-    print_summary(
+    print_ingestion_summary(
         total_keywords=total_keywords,
         jobs_fetched=jobs_fetched_count,
         new_jobs_count=len(new_jobs_list),
@@ -141,6 +197,31 @@ def run_pipeline(config: Optional[Config] = None):
         failed_requests_count=failed_requests_count,
     )
 
+    # ----------------------------------------------------
+    # Phase 2: Resume Matching Engine
+    # ----------------------------------------------------
+    if run_matching:
+        logger.info("Executing Phase 2 Resume Matching Engine...")
+        all_stored_jobs = get_all_jobs(conn)
+
+        if not all_stored_jobs:
+            logger.warning("No jobs stored in database to match against.")
+        else:
+            try:
+                matching_service = MatchingService(config=config)
+                resume = matching_service.prepare_resume()
+                match_results = matching_service.match_all_jobs(
+                    resume=resume, jobs=all_stored_jobs
+                )
+                save_match_results(conn, match_results)
+                print_match_results(match_results)
+
+            except FileNotFoundError as e:
+                logger.warning("Skipping matching: %s", str(e))
+            except Exception as e:
+                logger.error("Error during match evaluation: %s", str(e), exc_info=True)
+
+    conn.close()
     logger.info("Pipeline execution completed successfully.")
 
 
