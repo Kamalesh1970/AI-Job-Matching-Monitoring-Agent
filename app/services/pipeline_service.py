@@ -32,7 +32,9 @@ from app.services.health_service import HealthService
 from app.services.matching_service import MatchingService
 from app.services.telegram_notifier import TelegramNotifier
 from app.sources.adzuna import AdzunaJobSource
+from app.sources.gmail import GmailAPIClient, IndeedAlertEmailSource, LinkedInAlertEmailSource
 from app.sources.internshala import InternshalaJobSource
+
 
 logger = logging.getLogger("app.services.pipeline_service")
 
@@ -246,8 +248,105 @@ class PipelineService:
 
 
         # ----------------------------------------------------
+        # Phase 6: Ingestion - Gmail Alert Emails (LinkedIn & Indeed)
+        # ----------------------------------------------------
+        if cfg.gmail_enabled:
+            logger.info("Gmail API ingestion is enabled. Initializing Gmail client...")
+            try:
+                gmail_client = GmailAPIClient(
+                    credentials_path=cfg.gmail_credentials_path,
+                    token_path=cfg.gmail_token_path,
+                )
+
+                # 1. LinkedIn Email Alerts
+                li_source = LinkedInAlertEmailSource(
+                    gmail_client=gmail_client,
+                    query=cfg.gmail_linkedin_query,
+                    query_limit=cfg.gmail_query_limit,
+                )
+                li_run_id = record_source_run_start(conn, "LinkedIn Email Alert", started_at=started_at)
+                try:
+                    li_res = li_source.fetch_source_jobs()
+                    li_new_count = 0
+                    for job in li_res.jobs:
+                        jobs_fetched += 1
+                        if insert_job(conn, job):
+                            new_jobs += 1
+                            li_new_count += 1
+                        else:
+                            existing_jobs += 1
+
+                    record_source_run_finish(
+                        conn,
+                        run_id=li_run_id,
+                        status=li_res.status,
+                        jobs_fetched=li_res.total_fetched,
+                        new_jobs=li_new_count,
+                        error_message=li_res.error_message,
+                    )
+                    if li_res.status in (SourceStatus.FAILED, SourceStatus.BLOCKED, SourceStatus.PARTIAL_FAILURE):
+                        failed_sources += 1
+                except Exception as e:
+                    logger.error("Failure during LinkedIn email alert ingestion: %s", str(e))
+                    failed_sources += 1
+                    record_source_run_finish(
+                        conn,
+                        run_id=li_run_id,
+                        status=SourceStatus.FAILED,
+                        jobs_fetched=0,
+                        new_jobs=0,
+                        error_message=str(e),
+                    )
+
+                # 2. Indeed Email Alerts
+                ind_source = IndeedAlertEmailSource(
+                    gmail_client=gmail_client,
+                    query=cfg.gmail_indeed_query,
+                    query_limit=cfg.gmail_query_limit,
+                )
+                ind_run_id = record_source_run_start(conn, "Indeed Email Alert", started_at=started_at)
+                try:
+                    ind_res = ind_source.fetch_source_jobs()
+                    ind_new_count = 0
+                    for job in ind_res.jobs:
+                        jobs_fetched += 1
+                        if insert_job(conn, job):
+                            new_jobs += 1
+                            ind_new_count += 1
+                        else:
+                            existing_jobs += 1
+
+                    record_source_run_finish(
+                        conn,
+                        run_id=ind_run_id,
+                        status=ind_res.status,
+                        jobs_fetched=ind_res.total_fetched,
+                        new_jobs=ind_new_count,
+                        error_message=ind_res.error_message,
+                    )
+                    if ind_res.status in (SourceStatus.FAILED, SourceStatus.BLOCKED, SourceStatus.PARTIAL_FAILURE):
+                        failed_sources += 1
+                except Exception as e:
+                    logger.error("Failure during Indeed email alert ingestion: %s", str(e))
+                    failed_sources += 1
+                    record_source_run_finish(
+                        conn,
+                        run_id=ind_run_id,
+                        status=SourceStatus.FAILED,
+                        jobs_fetched=0,
+                        new_jobs=0,
+                        error_message=str(e),
+                    )
+
+            except Exception as e:
+                logger.error("Gmail API client initialization error: %s", str(e))
+                failed_sources += 1
+
+
+        # ----------------------------------------------------
         # Phase 2: Resume Matching Engine
         # ----------------------------------------------------
+
         match_results: List[MatchResult] = []
         try:
             all_stored_jobs = get_all_jobs(conn)

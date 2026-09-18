@@ -27,7 +27,9 @@ from app.services.matching_service import MatchingService
 from app.services.pipeline_service import PipelineService
 from app.services.telegram_notifier import TelegramNotifier
 from app.sources.adzuna import AdzunaJobSource
+from app.sources.gmail import GmailAPIClient, IndeedAlertEmailSource, LinkedInAlertEmailSource
 from app.sources.internshala import InternshalaJobSource
+
 
 
 
@@ -366,6 +368,65 @@ def run_pipeline(
     logger.info("Pipeline execution completed successfully.")
 
 
+def run_gmail_test(config: Config):
+    """
+    Executes a safe manual test of Gmail API job-alert ingestion.
+    Does NOT modify emails, delete emails, or send Telegram notifications.
+    """
+    logger = logging.getLogger("app.main")
+    logger.info("Executing safe manual test of Gmail job alert email sources...")
+
+    auth_status = "SUCCESS"
+    try:
+        gmail_client = GmailAPIClient(
+            credentials_path=config.gmail_credentials_path,
+            token_path=config.gmail_token_path,
+        )
+        gmail_client.authenticate()
+    except Exception as e:
+        auth_status = f"FAILED ({str(e)})"
+        logger.error("Gmail authentication failed: %s", str(e))
+
+    li_jobs_count = 0
+    ind_jobs_count = 0
+    total_parsed = 0
+    duplicates_removed = 0
+
+    if auth_status == "SUCCESS":
+        # 1. LinkedIn Alerts
+        li_source = LinkedInAlertEmailSource(
+            gmail_client=gmail_client,
+            query=config.gmail_linkedin_query,
+            query_limit=config.gmail_query_limit,
+        )
+        li_res = li_source.fetch_source_jobs()
+        li_jobs_count = len(li_res.jobs)
+
+        # 2. Indeed Alerts
+        ind_source = IndeedAlertEmailSource(
+            gmail_client=gmail_client,
+            query=config.gmail_indeed_query,
+            query_limit=config.gmail_query_limit,
+        )
+        ind_res = ind_source.fetch_source_jobs()
+        ind_jobs_count = len(ind_res.jobs)
+
+        all_jobs = li_res.jobs + ind_res.jobs
+        total_parsed = len(all_jobs)
+        unique_fingerprints = {j.fingerprint for j in all_jobs if j.fingerprint}
+        duplicates_removed = total_parsed - len(unique_fingerprints) if total_parsed else 0
+
+    print("\nGMAIL INGESTION SUMMARY")
+    print("=======================")
+    print(f"LinkedIn jobs parsed: {li_jobs_count}")
+    print(f"Indeed jobs parsed: {ind_jobs_count}")
+    print(f"Total jobs parsed: {total_parsed}")
+    print(f"Duplicates removed: {duplicates_removed}")
+    print(f"Authentication: {auth_status}")
+    print("\nNo emails modified.")
+    print("=======================\n")
+
+
 def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
     """Parses command-line flags."""
     parser = argparse.ArgumentParser(
@@ -396,6 +457,11 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         action="store_true",
         help="Skip Phase 2 job matching computation",
     )
+    parser.add_argument(
+        "--gmail-test",
+        action="store_true",
+        help="Run safe manual test for Gmail API job-alert ingestion",
+    )
     return parser.parse_args(args)
 
 
@@ -410,7 +476,10 @@ def main():
         logging.error("Configuration error: %s", str(e))
         sys.exit(1)
 
-    if parsed.scheduler:
+    if parsed.gmail_test:
+        run_gmail_test(config=config)
+
+    elif parsed.scheduler:
         logger = logging.getLogger("app.main")
         logger.info("Launching Phase 4 Scheduled Monitoring Service daemon...")
         pipeline_scheduler = PipelineScheduler(config=config)
@@ -436,3 +505,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

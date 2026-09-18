@@ -86,6 +86,14 @@ class Config:
     scheduler_interval_minutes: int = 60
     heartbeat_timeout_minutes: int = 180
     run_on_startup: bool = True
+    gmail_enabled: bool = False
+    gmail_credentials_path: str = "credentials.json"
+    gmail_token_path: str = "token.json"
+    gmail_query_limit: int = 50
+    gmail_lookback_days: int = 2
+    gmail_linkedin_query: str = "from:(linkedin.com) newer_than:2d"
+    gmail_indeed_query: str = "from:(indeed.com) newer_than:2d"
+
 
     def __post_init__(self):
         """Validate matching weights sum up to 1.0."""
@@ -238,6 +246,25 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
     run_on_startup_env = os.getenv("RUN_ON_STARTUP", "true").strip().lower()
     run_on_startup = run_on_startup_env in ("true", "1", "yes")
 
+    gmail_enabled_env = os.getenv("GMAIL_ENABLED", "false").strip().lower()
+    gmail_enabled = gmail_enabled_env in ("true", "1", "yes")
+
+    gmail_credentials_path = os.getenv("GMAIL_CREDENTIALS_PATH", "credentials.json").strip() or "credentials.json"
+    gmail_token_path = os.getenv("GMAIL_TOKEN_PATH", "token.json").strip() or "token.json"
+
+    try:
+        gmail_query_limit = int(os.getenv("GMAIL_QUERY_LIMIT", "50"))
+    except ValueError:
+        gmail_query_limit = 50
+
+    try:
+        gmail_lookback_days = int(os.getenv("GMAIL_LOOKBACK_DAYS", "2"))
+    except ValueError:
+        gmail_lookback_days = 2
+
+    gmail_linkedin_query = os.getenv("GMAIL_LINKEDIN_QUERY", "from:(linkedin.com) newer_than:2d").strip() or "from:(linkedin.com) newer_than:2d"
+    gmail_indeed_query = os.getenv("GMAIL_INDEED_QUERY", "from:(indeed.com) newer_than:2d").strip() or "from:(indeed.com) newer_than:2d"
+
     return Config(
         adzuna_app_id=app_id,
         adzuna_app_key=app_key,
@@ -269,5 +296,13 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
         scheduler_interval_minutes=scheduler_interval_minutes,
         heartbeat_timeout_minutes=heartbeat_timeout_minutes,
         run_on_startup=run_on_startup,
+        gmail_enabled=gmail_enabled,
+        gmail_credentials_path=gmail_credentials_path,
+        gmail_token_path=gmail_token_path,
+        gmail_query_limit=gmail_query_limit,
+        gmail_lookback_days=gmail_lookback_days,
+        gmail_linkedin_query=gmail_linkedin_query,
+        gmail_indeed_query=gmail_indeed_query,
     )
+
 
