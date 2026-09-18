@@ -6,9 +6,30 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, List, Optional, Set
 
+class SourceStatus:
+    """Source execution status constants."""
+
+    SUCCESS = "SUCCESS"
+    PARTIAL_FAILURE = "PARTIAL_FAILURE"
+    FAILED = "FAILED"
+    BLOCKED = "BLOCKED"
+
+
+@dataclass
+class SourceResult:
+    """Outcome and job payload returned by a job source execution."""
+
+    source_name: str
+    status: str
+    jobs: List["Job"] = field(default_factory=list)
+    total_fetched: int = 0
+    new_jobs: int = 0
+    error_message: Optional[str] = None
+
 
 @dataclass
 class Job:
+
     """
     Normalized internal Job representation.
     """

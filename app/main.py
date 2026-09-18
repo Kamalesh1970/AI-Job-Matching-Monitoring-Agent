@@ -27,6 +27,8 @@ from app.services.matching_service import MatchingService
 from app.services.pipeline_service import PipelineService
 from app.services.telegram_notifier import TelegramNotifier
 from app.sources.adzuna import AdzunaJobSource
+from app.sources.internshala import InternshalaJobSource
+
 
 
 def setup_logging():
@@ -288,6 +290,28 @@ def run_pipeline(
                 logger.error("Error processing keyword '%s': %s", keyword, str(e))
                 failed_requests_count += 1
 
+        if config.internshala_enabled:
+            logger.info("Processing Internshala ingestion...")
+            try:
+                ish_source = InternshalaJobSource(
+                    request_delay_min=config.internshala_request_delay_min,
+                    request_delay_max=config.internshala_request_delay_max,
+                )
+                source_res = ish_source.fetch_source_jobs(
+                    keywords=config.internshala_keywords,
+                    max_pages=config.internshala_max_pages,
+                )
+                jobs_fetched_count += source_res.total_fetched
+                for job in source_res.jobs:
+                    is_new = insert_job(conn, job)
+                    if is_new:
+                        new_jobs_list.append(job)
+                    else:
+                        existing_jobs_count += 1
+            except Exception as e:
+                logger.error("Error processing Internshala ingestion: %s", str(e))
+                failed_requests_count += 1
+
         print_new_jobs(new_jobs_list)
         print_ingestion_summary(
             total_keywords=total_keywords,
@@ -296,6 +320,7 @@ def run_pipeline(
             existing_jobs_count=existing_jobs_count,
             failed_requests_count=failed_requests_count,
         )
+
 
     # ----------------------------------------------------
     # Phase 2: Resume Matching Engine

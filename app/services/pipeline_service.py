@@ -14,6 +14,7 @@ from app.config import Config
 from app.db.database import (
     get_all_jobs,
     get_jobs_map,
+    get_last_source_run,
     get_notified_job_ids,
     get_stored_matches,
     initialize_database,
@@ -21,16 +22,20 @@ from app.db.database import (
     record_notifications,
     record_pipeline_finish,
     record_pipeline_start,
+    record_source_run_finish,
+    record_source_run_start,
     save_match_results,
 )
-from app.db.models import Job, MatchResult
+from app.db.models import Job, MatchResult, SourceStatus
 from app.services.digest_service import DigestService
 from app.services.health_service import HealthService
 from app.services.matching_service import MatchingService
 from app.services.telegram_notifier import TelegramNotifier
 from app.sources.adzuna import AdzunaJobSource
+from app.sources.internshala import InternshalaJobSource
 
 logger = logging.getLogger("app.services.pipeline_service")
+
 
 
 class PipelineStatus:
@@ -126,7 +131,7 @@ class PipelineService:
         critical_failure = False
 
         # ----------------------------------------------------
-        # Phase 1: Ingestion
+        # Phase 1: Ingestion - Adzuna
         # ----------------------------------------------------
         try:
             adzuna_source = AdzunaJobSource(
@@ -160,9 +165,85 @@ class PipelineService:
                     failed_sources += 1
 
         except Exception as e:
-            logger.error("Critical failure during Ingestion setup: %s", str(e))
+            logger.error("Critical failure during Adzuna Ingestion setup: %s", str(e))
             failed_sources += 1
-            error_message = f"Ingestion error: {str(e)}"
+            error_message = f"Adzuna Ingestion error: {str(e)}"
+
+        # ----------------------------------------------------
+        # Phase 5: Ingestion - Internshala (Yellow-tier)
+        # ----------------------------------------------------
+        if cfg.internshala_enabled:
+            ish_due = True
+            last_ish_run = get_last_source_run(conn, "Internshala")
+            if last_ish_run and last_ish_run.get("finished_at"):
+                try:
+                    last_finished_raw = last_ish_run["finished_at"]
+                    last_finished = datetime.fromisoformat(last_finished_raw)
+                    if last_finished.tzinfo is None:
+                        last_finished = last_finished.replace(tzinfo=timezone.utc)
+                    hours_since = (start_dt - last_finished).total_seconds() / 3600.0
+                    if hours_since < cfg.internshala_interval_hours:
+                        ish_due = False
+                        logger.info(
+                            "Internshala fetch skipped: last run was %.1f hours ago (interval: %dh)",
+                            hours_since,
+                            cfg.internshala_interval_hours,
+                        )
+                except Exception as e:
+                    logger.warning("Error parsing last Internshala run timestamp: %s", str(e))
+
+            if ish_due:
+                ish_run_id = record_source_run_start(conn, "Internshala", started_at=started_at)
+                try:
+                    ish_source = InternshalaJobSource(
+                        request_delay_min=cfg.internshala_request_delay_min,
+                        request_delay_max=cfg.internshala_request_delay_max,
+                        timeout=15,
+                    )
+                    source_res = ish_source.fetch_source_jobs(
+                        keywords=cfg.internshala_keywords,
+                        max_pages=cfg.internshala_max_pages,
+                    )
+
+                    ish_new_jobs = 0
+                    for job in source_res.jobs:
+                        jobs_fetched += 1
+                        is_new = insert_job(conn, job)
+                        if is_new:
+                            new_jobs += 1
+                            ish_new_jobs += 1
+                        else:
+                            existing_jobs += 1
+
+                    record_source_run_finish(
+                        conn,
+                        run_id=ish_run_id,
+                        status=source_res.status,
+                        jobs_fetched=source_res.total_fetched,
+                        new_jobs=ish_new_jobs,
+                        error_message=source_res.error_message,
+                    )
+
+                    if source_res.status in (SourceStatus.FAILED, SourceStatus.BLOCKED, SourceStatus.PARTIAL_FAILURE):
+                        failed_sources += 1
+                        logger.warning(
+                            "Internshala execution finished with status '%s' (error: %s)",
+                            source_res.status,
+                            source_res.error_message,
+                        )
+
+                except Exception as e:
+                    logger.error("Failure during Internshala execution: %s", str(e))
+                    failed_sources += 1
+                    record_source_run_finish(
+                        conn,
+                        run_id=ish_run_id,
+                        status=SourceStatus.FAILED,
+                        jobs_fetched=0,
+                        new_jobs=0,
+                        error_message=str(e),
+                    )
+
 
         # ----------------------------------------------------
         # Phase 2: Resume Matching Engine

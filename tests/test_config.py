@@ -76,3 +76,26 @@ def test_config_loads_from_custom_env_file(tmp_path):
         assert cfg.adzuna_app_id == "file_app_id"
         assert cfg.adzuna_app_key == "file_app_key"
         assert cfg.adzuna_country == "gb"
+
+
+def test_config_internshala_defaults_and_overrides():
+    """Test Internshala defaults and environment overrides."""
+    env = {
+        "ADZUNA_APP_ID": "id_val",
+        "ADZUNA_APP_KEY": "key_val",
+        "INTERNSHALA_ENABLED": "false",
+        "INTERNSHALA_INTERVAL_HOURS": "6",
+        "INTERNSHALA_REQUEST_DELAY_MIN": "1.5",
+        "INTERNSHALA_REQUEST_DELAY_MAX": "4.0",
+        "INTERNSHALA_MAX_PAGES": "5",
+        "INTERNSHALA_KEYWORDS": "python, data science",
+    }
+    with mock.patch.dict(os.environ, env, clear=True):
+        cfg = load_config(load_env_file=False)
+        assert cfg.internshala_enabled is False
+        assert cfg.internshala_interval_hours == 6
+        assert cfg.internshala_request_delay_min == 1.5
+        assert cfg.internshala_request_delay_max == 4.0
+        assert cfg.internshala_max_pages == 5
+        assert cfg.internshala_keywords == ["python", "data science"]
+

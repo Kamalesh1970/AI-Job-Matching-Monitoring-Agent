@@ -144,7 +144,32 @@ def initialize_database(db_path: str = "data/jobs.db") -> sqlite3.Connection:
             CREATE INDEX IF NOT EXISTS idx_health_alerts_type ON health_alerts(alert_type);
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS source_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source TEXT NOT NULL,
+                started_at TEXT NOT NULL,
+                finished_at TEXT,
+                status TEXT NOT NULL,
+                jobs_fetched INTEGER DEFAULT 0,
+                new_jobs INTEGER DEFAULT 0,
+                error_message TEXT
+            );
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_source_runs_source ON source_runs(source);
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_source_runs_started ON source_runs(started_at);
+            """
+        )
     return conn
+
 
 
 def _row_to_job(row: sqlite3.Row) -> Job:
@@ -637,3 +662,79 @@ def resolve_health_alerts(
             (resolved_at, alert_type),
         )
         return cursor.rowcount
+
+
+# ---------------------------------------------------------------------
+# Phase 5: Per-Source Run Tracking DB Functions
+# ---------------------------------------------------------------------
+
+
+def record_source_run_start(
+    conn: sqlite3.Connection, source: str, started_at: Optional[str] = None
+) -> int:
+    """
+    Records the start of an ingestion run for a specific source.
+    """
+    if not started_at:
+        started_at = datetime.now(timezone.utc).isoformat()
+
+    with conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO source_runs (source, started_at, status)
+            VALUES (?, ?, ?)
+            """,
+            (source, started_at, "RUNNING"),
+        )
+        return cursor.lastrowid
+
+
+def record_source_run_finish(
+    conn: sqlite3.Connection,
+    run_id: int,
+    status: str,
+    finished_at: Optional[str] = None,
+    jobs_fetched: int = 0,
+    new_jobs: int = 0,
+    error_message: Optional[str] = None,
+) -> bool:
+    """
+    Updates a source_runs record upon source execution completion.
+    """
+    if not finished_at:
+        finished_at = datetime.now(timezone.utc).isoformat()
+
+    with conn:
+        cursor = conn.execute(
+            """
+            UPDATE source_runs
+            SET finished_at = ?,
+                status = ?,
+                jobs_fetched = ?,
+                new_jobs = ?,
+                error_message = ?
+            WHERE id = ?
+            """,
+            (finished_at, status, jobs_fetched, new_jobs, error_message, run_id),
+        )
+        return cursor.rowcount > 0
+
+
+def get_last_source_run(conn: sqlite3.Connection, source: str) -> Optional[dict]:
+    """
+    Retrieves the most recent completed source run record for a given source.
+    """
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT * FROM source_runs
+        WHERE source = ? AND finished_at IS NOT NULL
+        ORDER BY id DESC LIMIT 1
+        """,
+        (source,),
+    )
+    row = cursor.fetchone()
+    if row:
+        return dict(row)
+    return None
+

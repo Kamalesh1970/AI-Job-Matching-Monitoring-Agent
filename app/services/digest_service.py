@@ -49,10 +49,11 @@ class DigestService:
         self.max_msg_len = max_msg_len
 
     def filter_and_sort_matches(
-        self, matches: List[MatchResult]
+        self, matches: List[MatchResult], jobs_map: Optional[Dict[int, Job]] = None
     ) -> List[MatchResult]:
         """
         Filters matches meeting min_score and match_status != 'FILTERED',
+        deduplicates cross-source candidates by fingerprint,
         sorted descending by final_score and limited to max_jobs.
         """
         eligible = [
@@ -61,7 +62,23 @@ class DigestService:
             if m.final_score >= self.min_score and m.match_status != "FILTERED"
         ]
         eligible.sort(key=lambda m: m.final_score, reverse=True)
-        return eligible[: self.max_jobs]
+
+        if not jobs_map:
+            return eligible[: self.max_jobs]
+
+        deduped: List[MatchResult] = []
+        seen_fingerprints = set()
+
+        for match in eligible:
+            job = jobs_map.get(match.job_id) if match.job_id else None
+            if job and job.fingerprint:
+                if job.fingerprint in seen_fingerprints:
+                    continue
+                seen_fingerprints.add(job.fingerprint)
+            deduped.append(match)
+
+        return deduped[: self.max_jobs]
+
 
     def format_job_card(
         self, match: MatchResult, job: Optional[Job] = None, index: int = 1
@@ -137,7 +154,8 @@ class DigestService:
         if jobs_map is None:
             jobs_map = {}
 
-        filtered = self.filter_and_sort_matches(matches)
+        filtered = self.filter_and_sort_matches(matches, jobs_map=jobs_map)
+
 
         if not filtered:
             if not self.send_empty:

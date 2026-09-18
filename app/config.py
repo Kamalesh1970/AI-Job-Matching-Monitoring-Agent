@@ -23,6 +23,19 @@ DEFAULT_SEARCH_KEYWORDS: List[str] = [
     "Python Developer",
 ]
 
+DEFAULT_INTERNSHALA_KEYWORDS: List[str] = [
+    "artificial intelligence",
+    "machine learning",
+    "data science",
+    "computer vision",
+    "deep learning",
+    "NLP",
+    "AI engineer",
+    "machine learning engineer",
+    "data scientist",
+    "Python",
+]
+
 DEFAULT_PREFERRED_LOCATIONS: List[str] = [
     "Coimbatore",
     "Chennai",
@@ -44,6 +57,14 @@ class Config:
     adzuna_country: str = "in"
     adzuna_results_per_page: int = 20
     adzuna_max_pages: int = 2
+    internshala_enabled: bool = True
+    internshala_interval_hours: int = 12
+    internshala_request_delay_min: float = 2.0
+    internshala_request_delay_max: float = 5.0
+    internshala_max_pages: int = 3
+    internshala_keywords: List[str] = field(
+        default_factory=lambda: list(DEFAULT_INTERNSHALA_KEYWORDS)
+    )
     db_path: str = "data/jobs.db"
     keywords: List[str] = field(default_factory=lambda: list(DEFAULT_SEARCH_KEYWORDS))
     resume_path: str = "data/resume/base_resume.txt"
@@ -121,6 +142,35 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
     except ValueError:
         max_pages = 2
 
+    internshala_enabled_env = os.getenv("INTERNSHALA_ENABLED", "true").strip().lower()
+    internshala_enabled = internshala_enabled_env in ("true", "1", "yes")
+
+    try:
+        internshala_interval_hours = int(os.getenv("INTERNSHALA_INTERVAL_HOURS", "12"))
+    except ValueError:
+        internshala_interval_hours = 12
+
+    try:
+        internshala_request_delay_min = float(os.getenv("INTERNSHALA_REQUEST_DELAY_MIN", "2"))
+    except ValueError:
+        internshala_request_delay_min = 2.0
+
+    try:
+        internshala_request_delay_max = float(os.getenv("INTERNSHALA_REQUEST_DELAY_MAX", "5"))
+    except ValueError:
+        internshala_request_delay_max = 5.0
+
+    try:
+        internshala_max_pages = int(os.getenv("INTERNSHALA_MAX_PAGES", "3"))
+    except ValueError:
+        internshala_max_pages = 3
+
+    ishala_kw_str = os.getenv("INTERNSHALA_KEYWORDS", "").strip()
+    if ishala_kw_str:
+        internshala_keywords = [kw.strip() for kw in ishala_kw_str.split(",") if kw.strip()]
+    else:
+        internshala_keywords = list(DEFAULT_INTERNSHALA_KEYWORDS)
+
     db_path = os.getenv("DB_PATH", "data/jobs.db").strip() or "data/jobs.db"
     resume_path = os.getenv("RESUME_PATH", "data/resume/base_resume.txt").strip() or "data/resume/base_resume.txt"
     embedding_model = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2").strip() or "all-MiniLM-L6-v2"
@@ -194,6 +244,12 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
         adzuna_country=country,
         adzuna_results_per_page=results_per_page,
         adzuna_max_pages=max_pages,
+        internshala_enabled=internshala_enabled,
+        internshala_interval_hours=internshala_interval_hours,
+        internshala_request_delay_min=internshala_request_delay_min,
+        internshala_request_delay_max=internshala_request_delay_max,
+        internshala_max_pages=internshala_max_pages,
+        internshala_keywords=internshala_keywords,
         db_path=db_path,
         keywords=list(DEFAULT_SEARCH_KEYWORDS),
         resume_path=resume_path,
@@ -214,3 +270,4 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
         heartbeat_timeout_minutes=heartbeat_timeout_minutes,
         run_on_startup=run_on_startup,
     )
+

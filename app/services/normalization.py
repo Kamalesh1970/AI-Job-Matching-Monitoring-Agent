@@ -4,7 +4,8 @@ Normalization service to transform raw API responses into internal Job models.
 
 import re
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
+
 
 from app.db.models import Job
 from app.services.deduplication import generate_fingerprint
@@ -123,3 +124,95 @@ def normalize_adzuna_job(raw_job: Dict[str, Any], default_currency: str = "INR")
         category=category,
         fingerprint=fingerprint,
     )
+
+
+def parse_stipend_range(text: Optional[str]) -> Tuple[Optional[float], Optional[float], Optional[str]]:
+    """
+    Parses Internshala stipend/salary string (e.g. '₹ 10,000 /month', '₹ 10,000-15,000 /month', 'Unpaid')
+    into numeric min, max, and currency code.
+    """
+    if not text:
+        return None, None, None
+
+    text_clean = text.strip()
+    if not text_clean:
+        return None, None, None
+
+    if "unpaid" in text_clean.lower():
+        return 0.0, 0.0, "INR"
+
+    # Extract all integer/float numbers (e.g., 10,000 -> 10000)
+    numbers = re.findall(r"\d[\d,]*", text_clean)
+    numbers_cleaned = []
+    for num_str in numbers:
+        try:
+            val = float(num_str.replace(",", ""))
+            numbers_cleaned.append(val)
+        except ValueError:
+            continue
+
+    if not numbers_cleaned:
+        return None, None, None
+
+    if len(numbers_cleaned) == 1:
+        return numbers_cleaned[0], numbers_cleaned[0], "INR"
+    else:
+        return min(numbers_cleaned[:2]), max(numbers_cleaned[:2]), "INR"
+
+
+def normalize_internshala_job(raw_job: Dict[str, Any]) -> Job:
+    """
+    Transforms a raw Internshala HTML listing dictionary into a normalized Job dataclass.
+
+    Args:
+        raw_job: Raw dictionary extracted from Internshala card parsing.
+
+    Returns:
+        Job: Cleaned, structured Job instance.
+    """
+    if not isinstance(raw_job, dict):
+        raw_job = {}
+
+    source = "Internshala"
+    source_job_id = str(raw_job.get("source_job_id") or "").strip()
+    title = strip_html(raw_job.get("title", ""))
+    company = strip_html(raw_job.get("company", ""))
+    location = strip_html(raw_job.get("location", ""))
+    url = str(raw_job.get("url") or "").strip()
+    description = strip_html(raw_job.get("description", "")) or title
+    created_at = raw_job.get("created_at")
+    if created_at is not None:
+        created_at = str(created_at).strip()
+
+    employment_type = raw_job.get("employment_type")
+    if employment_type:
+        employment_type = str(employment_type).strip()
+
+    category = raw_job.get("category")
+    if category:
+        category = str(category).strip()
+
+    salary_text = raw_job.get("salary_text", "")
+    salary_min, salary_max, salary_currency = parse_stipend_range(salary_text)
+
+    fetched_at = datetime.now(timezone.utc).isoformat()
+    fingerprint = generate_fingerprint(company=company, title=title, location=location)
+
+    return Job(
+        source=source,
+        source_job_id=source_job_id,
+        title=title,
+        company=company,
+        location=location,
+        description=description,
+        url=url,
+        created_at=created_at,
+        fetched_at=fetched_at,
+        salary_min=salary_min,
+        salary_max=salary_max,
+        salary_currency=salary_currency,
+        employment_type=employment_type,
+        category=category,
+        fingerprint=fingerprint,
+    )
+
