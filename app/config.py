@@ -96,6 +96,12 @@ class Config:
     source_adzuna_enabled: bool = True
     source_internshala_enabled: bool = True
     source_gmail_enabled: bool = False
+    source_arbeitnow_enabled: bool = True
+    source_remoteok_enabled: bool = True
+    source_jobicy_enabled: bool = True
+    source_himalayas_enabled: bool = True
+    source_jooble_enabled: bool = True
+    jooble_api_key: str = ""
     llm_enabled: bool = False
     llm_provider: str = "gemini"
     gemini_api_key: str = ""
@@ -291,6 +297,23 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
     else:
         source_gmail_enabled = gmail_enabled
 
+    source_arbeitnow_env = os.getenv("SOURCE_ARBEITNOW_ENABLED", "true").strip().lower()
+    source_arbeitnow_enabled = source_arbeitnow_env in ("true", "1", "yes")
+
+    source_remoteok_env = os.getenv("SOURCE_REMOTEOK_ENABLED", "true").strip().lower()
+    source_remoteok_enabled = source_remoteok_env in ("true", "1", "yes")
+
+    source_jobicy_env = os.getenv("SOURCE_JOBICY_ENABLED", "true").strip().lower()
+    source_jobicy_enabled = source_jobicy_env in ("true", "1", "yes")
+
+    source_himalayas_env = os.getenv("SOURCE_HIMALAYAS_ENABLED", "true").strip().lower()
+    source_himalayas_enabled = source_himalayas_env in ("true", "1", "yes")
+
+    source_jooble_env = os.getenv("SOURCE_JOOBLE_ENABLED", "true").strip().lower()
+    source_jooble_enabled = source_jooble_env in ("true", "1", "yes")
+
+    jooble_api_key = os.getenv("JOOBLE_API_KEY", "").strip()
+
     llm_enabled_env = os.getenv("LLM_ENABLED", "false").strip().lower()
     llm_enabled = llm_enabled_env in ("true", "1", "yes")
 
@@ -351,6 +374,12 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
         source_adzuna_enabled=source_adzuna_enabled,
         source_internshala_enabled=source_internshala_enabled,
         source_gmail_enabled=source_gmail_enabled,
+        source_arbeitnow_enabled=source_arbeitnow_enabled,
+        source_remoteok_enabled=source_remoteok_enabled,
+        source_jobicy_enabled=source_jobicy_enabled,
+        source_himalayas_enabled=source_himalayas_enabled,
+        source_jooble_enabled=source_jooble_enabled,
+        jooble_api_key=jooble_api_key,
         llm_enabled=llm_enabled,
         llm_provider=llm_provider,
         gemini_api_key=gemini_api_key,

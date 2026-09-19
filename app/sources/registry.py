@@ -8,9 +8,14 @@ from typing import Dict, List, Optional, Set
 
 from app.config import Config
 from app.sources.adzuna import AdzunaJobSource
+from app.sources.arbeitnow import ArbeitnowJobSource
 from app.sources.base import BaseJobSource
 from app.sources.gmail import IndeedAlertEmailSource, LinkedInAlertEmailSource
+from app.sources.himalayas import HimalayasJobSource
 from app.sources.internshala import InternshalaJobSource
+from app.sources.jobicy import JobicyJobSource
+from app.sources.jooble import JoobleJobSource
+from app.sources.remoteok import RemoteOKJobSource
 
 logger = logging.getLogger(__name__)
 
@@ -135,5 +140,20 @@ def create_default_source_registry(config: Optional[Config] = None) -> JobSource
             query_limit=config.gmail_query_limit,
         )
         registry.register(indeed_email)
+
+        arbeitnow = ArbeitnowJobSource()
+        registry.register(arbeitnow)
+
+        remoteok = RemoteOKJobSource()
+        registry.register(remoteok)
+
+        jobicy = JobicyJobSource()
+        registry.register(jobicy)
+
+        himalayas = HimalayasJobSource()
+        registry.register(himalayas)
+
+        jooble = JoobleJobSource(api_key=config.jooble_api_key)
+        registry.register(jooble)
 
     return registry
