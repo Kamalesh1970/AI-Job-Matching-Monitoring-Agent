@@ -93,6 +93,9 @@ class Config:
     gmail_lookback_days: int = 2
     gmail_linkedin_query: str = "from:(linkedin.com) newer_than:2d"
     gmail_indeed_query: str = "from:(indeed.com) newer_than:2d"
+    source_adzuna_enabled: bool = True
+    source_internshala_enabled: bool = True
+    source_gmail_enabled: bool = False
     llm_enabled: bool = False
     llm_provider: str = "gemini"
     gemini_api_key: str = ""
@@ -273,6 +276,21 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
     gmail_linkedin_query = os.getenv("GMAIL_LINKEDIN_QUERY", "from:(linkedin.com) newer_than:2d").strip() or "from:(linkedin.com) newer_than:2d"
     gmail_indeed_query = os.getenv("GMAIL_INDEED_QUERY", "from:(indeed.com) newer_than:2d").strip() or "from:(indeed.com) newer_than:2d"
 
+    source_adzuna_enabled_env = os.getenv("SOURCE_ADZUNA_ENABLED", "true").strip().lower()
+    source_adzuna_enabled = source_adzuna_enabled_env in ("true", "1", "yes")
+
+    source_ish_env = os.getenv("SOURCE_INTERNSHALA_ENABLED", "").strip().lower()
+    if source_ish_env:
+        source_internshala_enabled = source_ish_env in ("true", "1", "yes")
+    else:
+        source_internshala_enabled = internshala_enabled
+
+    source_gmail_env = os.getenv("SOURCE_GMAIL_ENABLED", "").strip().lower()
+    if source_gmail_env:
+        source_gmail_enabled = source_gmail_env in ("true", "1", "yes")
+    else:
+        source_gmail_enabled = gmail_enabled
+
     llm_enabled_env = os.getenv("LLM_ENABLED", "false").strip().lower()
     llm_enabled = llm_enabled_env in ("true", "1", "yes")
 
@@ -330,6 +348,9 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
         gmail_lookback_days=gmail_lookback_days,
         gmail_linkedin_query=gmail_linkedin_query,
         gmail_indeed_query=gmail_indeed_query,
+        source_adzuna_enabled=source_adzuna_enabled,
+        source_internshala_enabled=source_internshala_enabled,
+        source_gmail_enabled=source_gmail_enabled,
         llm_enabled=llm_enabled,
         llm_provider=llm_provider,
         gemini_api_key=gemini_api_key,

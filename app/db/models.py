@@ -13,6 +13,7 @@ class SourceStatus:
     PARTIAL_FAILURE = "PARTIAL_FAILURE"
     FAILED = "FAILED"
     BLOCKED = "BLOCKED"
+    DISABLED = "DISABLED"
 
 
 @dataclass
@@ -25,6 +26,10 @@ class SourceResult:
     total_fetched: int = 0
     new_jobs: int = 0
     error_message: Optional[str] = None
+    duration_seconds: float = 0.0
+    timestamp: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
 
 
 @dataclass
@@ -54,6 +59,16 @@ class Job:
     first_seen_at: Optional[str] = None
     last_seen_at: Optional[str] = None
     id: Optional[int] = None
+
+    @property
+    def apply_url(self) -> str:
+        """Alias for job URL / apply link."""
+        return self.url
+
+    @property
+    def posted_at(self) -> Optional[str]:
+        """Alias for job creation / posting timestamp."""
+        return self.created_at
 
     def to_dict(self) -> dict:
         """Converts Job instance to dictionary."""

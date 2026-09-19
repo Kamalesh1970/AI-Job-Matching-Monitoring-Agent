@@ -81,6 +81,22 @@ class InternshalaJobSource(BaseJobSource):
     def name(self) -> str:
         return "Internshala"
 
+    @property
+    def source_identifier(self) -> str:
+        return "internshala"
+
+    @property
+    def source_type(self) -> str:
+        return "scraper"
+
+    def is_enabled(self, config: Optional[Any] = None) -> bool:
+        if config is not None:
+            if hasattr(config, "source_internshala_enabled"):
+                return bool(config.source_internshala_enabled)
+            if hasattr(config, "internshala_enabled"):
+                return bool(config.internshala_enabled)
+        return True
+
     def _slugify_keyword(self, keyword: str) -> str:
         """Converts keyword phrase to URL slug (e.g. 'machine learning' -> 'machine-learning')."""
         cleaned = re.sub(r"[^\w\s-]", "", keyword.lower().strip())

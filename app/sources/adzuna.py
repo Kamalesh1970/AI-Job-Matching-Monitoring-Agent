@@ -35,6 +35,20 @@ class AdzunaJobSource(BaseJobSource):
     def name(self) -> str:
         return "Adzuna"
 
+    @property
+    def source_identifier(self) -> str:
+        return "adzuna"
+
+    @property
+    def source_type(self) -> str:
+        return "api"
+
+    def is_enabled(self, config: Optional[Any] = None) -> bool:
+        if config is not None:
+            if hasattr(config, "source_adzuna_enabled") and not config.source_adzuna_enabled:
+                return False
+        return bool(self.app_id and self.app_key)
+
     def fetch_jobs_raw(
         self, keyword: str, page: int = 1, results_per_page: int = 20
     ) -> List[Dict[str, Any]]:
@@ -129,3 +143,42 @@ class AdzunaJobSource(BaseJobSource):
                     logger.warning("No jobs returned or request failed on page 1 for keyword '%s'", keyword)
 
         return all_jobs, any_success
+
+    def fetch_source_jobs(
+        self, keywords: Optional[List[str]] = None, max_pages: int = 2, results_per_page: int = 20
+    ) -> Any:
+        """
+        Executes Adzuna fetch across keywords and returns structured SourceResult.
+        """
+        from app.db.models import SourceResult, SourceStatus
+
+        if not keywords:
+            keywords = ["AI Engineer"]
+
+        all_jobs: List[Job] = []
+        failed_count = 0
+        success_count = 0
+
+        for keyword in keywords:
+            jobs, success = self.fetch_jobs_for_keyword(
+                keyword=keyword, max_pages=max_pages, results_per_page=results_per_page
+            )
+            all_jobs.extend(jobs)
+            if success:
+                success_count += 1
+            else:
+                failed_count += 1
+
+        if failed_count > 0 and success_count == 0:
+            status = SourceStatus.FAILED
+        elif failed_count > 0 and success_count > 0:
+            status = SourceStatus.PARTIAL_FAILURE
+        else:
+            status = SourceStatus.SUCCESS
+
+        return SourceResult(
+            source_name=self.name,
+            status=status,
+            jobs=all_jobs,
+            total_fetched=len(all_jobs),
+        )

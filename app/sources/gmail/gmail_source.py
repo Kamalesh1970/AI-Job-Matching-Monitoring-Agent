@@ -34,6 +34,22 @@ class LinkedInAlertEmailSource(BaseJobSource):
     def name(self) -> str:
         return "LinkedIn Email Alert"
 
+    @property
+    def source_identifier(self) -> str:
+        return "linkedin_email"
+
+    @property
+    def source_type(self) -> str:
+        return "email_alert"
+
+    def is_enabled(self, config: Optional[Any] = None) -> bool:
+        if config is not None:
+            if hasattr(config, "source_gmail_enabled"):
+                return bool(config.source_gmail_enabled)
+            if hasattr(config, "gmail_enabled"):
+                return bool(config.gmail_enabled)
+        return True
+
     def fetch_jobs_raw(
         self, keyword: str = "", page: int = 1, results_per_page: int = 20
     ) -> List[Dict[str, Any]]:
@@ -135,6 +151,22 @@ class IndeedAlertEmailSource(BaseJobSource):
     @property
     def name(self) -> str:
         return "Indeed Email Alert"
+
+    @property
+    def source_identifier(self) -> str:
+        return "indeed_email"
+
+    @property
+    def source_type(self) -> str:
+        return "email_alert"
+
+    def is_enabled(self, config: Optional[Any] = None) -> bool:
+        if config is not None:
+            if hasattr(config, "source_gmail_enabled"):
+                return bool(config.source_gmail_enabled)
+            if hasattr(config, "gmail_enabled"):
+                return bool(config.gmail_enabled)
+        return True
 
     def fetch_jobs_raw(
         self, keyword: str = "", page: int = 1, results_per_page: int = 20

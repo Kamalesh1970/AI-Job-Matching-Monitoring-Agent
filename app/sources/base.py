@@ -3,7 +3,8 @@ Abstract Base Class for job source fetchers.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+from app.db.models import SourceResult, SourceStatus
 
 
 class BaseJobSource(ABC):
@@ -17,6 +18,22 @@ class BaseJobSource(ABC):
     def name(self) -> str:
         """Returns the human-readable name of the source (e.g. 'Adzuna')."""
         pass
+
+    @property
+    def source_identifier(self) -> str:
+        """Returns the unique machine-readable identifier of the source (e.g. 'adzuna')."""
+        return self.name.lower().replace(" ", "_")
+
+    @property
+    def source_type(self) -> str:
+        """Returns the category of the source: 'api', 'scraper', 'email_alert', 'ats'."""
+        return "api"
+
+    def is_enabled(self, config: Optional[Any] = None) -> bool:
+        """
+        Determines whether this source is enabled in application configuration.
+        """
+        return True
 
     @abstractmethod
     def fetch_jobs_raw(
@@ -34,3 +51,17 @@ class BaseJobSource(ABC):
             List[Dict[str, Any]]: List of raw job result dictionaries.
         """
         pass
+
+    def fetch_source_jobs(self, **kwargs: Any) -> SourceResult:
+        """
+        Standardized execution entry point for fetching and normalizing jobs.
+
+        Returns:
+            SourceResult containing execution status, job payload, metrics, and error info.
+        """
+        return SourceResult(
+            source_name=self.name,
+            status=SourceStatus.SUCCESS,
+            jobs=[],
+            total_fetched=0,
+        )

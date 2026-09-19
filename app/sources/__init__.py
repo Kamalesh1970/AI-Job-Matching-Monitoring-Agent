@@ -6,6 +6,7 @@ from app.sources.adzuna import AdzunaJobSource
 from app.sources.base import BaseJobSource
 from app.sources.gmail import IndeedAlertEmailSource, LinkedInAlertEmailSource
 from app.sources.internshala import InternshalaJobSource
+from app.sources.registry import JobSourceRegistry, create_default_source_registry
 
 __all__ = [
     "BaseJobSource",
@@ -13,5 +14,6 @@ __all__ = [
     "InternshalaJobSource",
     "LinkedInAlertEmailSource",
     "IndeedAlertEmailSource",
+    "JobSourceRegistry",
+    "create_default_source_registry",
 ]
-
