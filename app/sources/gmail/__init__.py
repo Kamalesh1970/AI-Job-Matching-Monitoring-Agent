@@ -2,9 +2,19 @@
 Gmail API Ingestion Subpackage for LinkedIn and Indeed Job Alerts.
 """
 
-from app.sources.gmail.email_parser import IndeedEmailParser, LinkedInEmailParser
+from app.sources.gmail.email_parser import (
+    GlassdoorEmailParser,
+    IndeedEmailParser,
+    LinkedInEmailParser,
+    NaukriEmailParser,
+)
 from app.sources.gmail.gmail_client import GmailAPIClient
-from app.sources.gmail.gmail_source import IndeedAlertEmailSource, LinkedInAlertEmailSource
+from app.sources.gmail.gmail_source import (
+    GlassdoorAlertEmailSource,
+    IndeedAlertEmailSource,
+    LinkedInAlertEmailSource,
+    NaukriAlertEmailSource,
+)
 from app.sources.gmail.models import ParsedEmailData
 
 __all__ = [
@@ -12,6 +22,10 @@ __all__ = [
     "ParsedEmailData",
     "LinkedInEmailParser",
     "IndeedEmailParser",
+    "NaukriEmailParser",
+    "GlassdoorEmailParser",
     "LinkedInAlertEmailSource",
     "IndeedAlertEmailSource",
+    "NaukriAlertEmailSource",
+    "GlassdoorAlertEmailSource",
 ]

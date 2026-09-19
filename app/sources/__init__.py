@@ -5,7 +5,12 @@ Job sources module.
 from app.sources.adzuna import AdzunaJobSource
 from app.sources.arbeitnow import ArbeitnowJobSource
 from app.sources.base import BaseJobSource
-from app.sources.gmail import IndeedAlertEmailSource, LinkedInAlertEmailSource
+from app.sources.gmail import (
+    GlassdoorAlertEmailSource,
+    IndeedAlertEmailSource,
+    LinkedInAlertEmailSource,
+    NaukriAlertEmailSource,
+)
 from app.sources.himalayas import HimalayasJobSource
 from app.sources.internshala import InternshalaJobSource
 from app.sources.jobicy import JobicyJobSource
@@ -19,6 +24,8 @@ __all__ = [
     "InternshalaJobSource",
     "LinkedInAlertEmailSource",
     "IndeedAlertEmailSource",
+    "NaukriAlertEmailSource",
+    "GlassdoorAlertEmailSource",
     "ArbeitnowJobSource",
     "RemoteOKJobSource",
     "JobicyJobSource",

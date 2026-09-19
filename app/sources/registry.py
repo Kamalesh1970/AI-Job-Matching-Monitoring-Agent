@@ -10,7 +10,12 @@ from app.config import Config
 from app.sources.adzuna import AdzunaJobSource
 from app.sources.arbeitnow import ArbeitnowJobSource
 from app.sources.base import BaseJobSource
-from app.sources.gmail import IndeedAlertEmailSource, LinkedInAlertEmailSource
+from app.sources.gmail import (
+    GlassdoorAlertEmailSource,
+    IndeedAlertEmailSource,
+    LinkedInAlertEmailSource,
+    NaukriAlertEmailSource,
+)
 from app.sources.himalayas import HimalayasJobSource
 from app.sources.internshala import InternshalaJobSource
 from app.sources.jobicy import JobicyJobSource
@@ -140,6 +145,18 @@ def create_default_source_registry(config: Optional[Config] = None) -> JobSource
             query_limit=config.gmail_query_limit,
         )
         registry.register(indeed_email)
+
+        naukri_email = NaukriAlertEmailSource(
+            query=config.gmail_naukri_query,
+            query_limit=config.gmail_query_limit,
+        )
+        registry.register(naukri_email)
+
+        glassdoor_email = GlassdoorAlertEmailSource(
+            query=config.gmail_glassdoor_query,
+            query_limit=config.gmail_query_limit,
+        )
+        registry.register(glassdoor_email)
 
         arbeitnow = ArbeitnowJobSource()
         registry.register(arbeitnow)

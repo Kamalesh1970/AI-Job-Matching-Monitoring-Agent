@@ -93,6 +93,8 @@ class Config:
     gmail_lookback_days: int = 2
     gmail_linkedin_query: str = "from:(linkedin.com) newer_than:2d"
     gmail_indeed_query: str = "from:(indeed.com) newer_than:2d"
+    gmail_naukri_query: str = "from:(naukri.com) newer_than:2d"
+    gmail_glassdoor_query: str = "from:(glassdoor.com) newer_than:2d"
     source_adzuna_enabled: bool = True
     source_internshala_enabled: bool = True
     source_gmail_enabled: bool = False
@@ -101,6 +103,8 @@ class Config:
     source_jobicy_enabled: bool = True
     source_himalayas_enabled: bool = True
     source_jooble_enabled: bool = True
+    source_naukri_enabled: bool = True
+    source_glassdoor_enabled: bool = True
     jooble_api_key: str = ""
     llm_enabled: bool = False
     llm_provider: str = "gemini"
@@ -281,6 +285,8 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
 
     gmail_linkedin_query = os.getenv("GMAIL_LINKEDIN_QUERY", "from:(linkedin.com) newer_than:2d").strip() or "from:(linkedin.com) newer_than:2d"
     gmail_indeed_query = os.getenv("GMAIL_INDEED_QUERY", "from:(indeed.com) newer_than:2d").strip() or "from:(indeed.com) newer_than:2d"
+    gmail_naukri_query = os.getenv("GMAIL_NAUKRI_QUERY", "from:(naukri.com) newer_than:2d").strip() or "from:(naukri.com) newer_than:2d"
+    gmail_glassdoor_query = os.getenv("GMAIL_GLASSDOOR_QUERY", "from:(glassdoor.com) newer_than:2d").strip() or "from:(glassdoor.com) newer_than:2d"
 
     source_adzuna_enabled_env = os.getenv("SOURCE_ADZUNA_ENABLED", "true").strip().lower()
     source_adzuna_enabled = source_adzuna_enabled_env in ("true", "1", "yes")
@@ -311,6 +317,12 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
 
     source_jooble_env = os.getenv("SOURCE_JOOBLE_ENABLED", "true").strip().lower()
     source_jooble_enabled = source_jooble_env in ("true", "1", "yes")
+
+    source_naukri_env = os.getenv("SOURCE_NAUKRI_ENABLED", "true").strip().lower()
+    source_naukri_enabled = source_naukri_env in ("true", "1", "yes")
+
+    source_glassdoor_env = os.getenv("SOURCE_GLASSDOOR_ENABLED", "true").strip().lower()
+    source_glassdoor_enabled = source_glassdoor_env in ("true", "1", "yes")
 
     jooble_api_key = os.getenv("JOOBLE_API_KEY", "").strip()
 
@@ -371,6 +383,8 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
         gmail_lookback_days=gmail_lookback_days,
         gmail_linkedin_query=gmail_linkedin_query,
         gmail_indeed_query=gmail_indeed_query,
+        gmail_naukri_query=gmail_naukri_query,
+        gmail_glassdoor_query=gmail_glassdoor_query,
         source_adzuna_enabled=source_adzuna_enabled,
         source_internshala_enabled=source_internshala_enabled,
         source_gmail_enabled=source_gmail_enabled,
@@ -379,6 +393,8 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
         source_jobicy_enabled=source_jobicy_enabled,
         source_himalayas_enabled=source_himalayas_enabled,
         source_jooble_enabled=source_jooble_enabled,
+        source_naukri_enabled=source_naukri_enabled,
+        source_glassdoor_enabled=source_glassdoor_enabled,
         jooble_api_key=jooble_api_key,
         llm_enabled=llm_enabled,
         llm_provider=llm_provider,

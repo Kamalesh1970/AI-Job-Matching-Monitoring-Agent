@@ -17,6 +17,8 @@ This document provides official developer documentation for all job sources inte
 | **Jobicy** | `jobicy` | REST API | `GET https://jobicy.com/api/v2/remote-jobs` | None | Free Public API | `IMPLEMENTED` |
 | **Himalayas** | `himalayas` | REST API | `GET https://himalayas.app/jobs/api` | None | Free Public API | `IMPLEMENTED` |
 | **Jooble** | `jooble` | REST API | `POST https://jooble.org/api/{api_key}` | `JOOBLE_API_KEY` | Free Tier (API Key) | `REQUIRES_USER_SETUP` |
+| **Naukri Email** | `naukri_email` | Gmail API | Read-Only Gmail OAuth 2.0 (`gmail.readonly`) | `credentials.json` / `token.json` | Free | `IMPLEMENTED` |
+| **Glassdoor Email** | `glassdoor_email` | Gmail API | Read-Only Gmail OAuth 2.0 (`gmail.readonly`) | `credentials.json` / `token.json` | Free | `IMPLEMENTED` |
 
 ---
 
@@ -83,10 +85,32 @@ This document provides official developer documentation for all job sources inte
   - `SOURCE_JOOBLE_ENABLED=true`
   - `JOOBLE_API_KEY=your_key_here`
 - **Rate Limits**: 500 requests/day on free tier.
-- **Status**: `REQUIRES_USER_SETUP`
-- **Smoke Test Outcome**: `is_enabled()` returns `False` and `fetch_source_jobs()` returns status `DISABLED` gracefully when no key is present.
+### 2.6 Naukri Email Alert Source
+- **Source Identifier**: `naukri_email`
+- **Class**: `NaukriAlertEmailSource` ([`app/sources/gmail/gmail_source.py`](file:///home/kamalesh/AI%20Job-Matching%20%26%20Monitoring%20Agent/app/sources/gmail/gmail_source.py))
+- **Parser**: `NaukriEmailParser` ([`app/sources/gmail/email_parser.py`](file:///home/kamalesh/AI%20Job-Matching%20%26%20Monitoring%20Agent/app/sources/gmail/email_parser.py))
+- **Access Endpoint**: Gmail API `users.messages.list` & `users.messages.get` (Read-only OAuth 2.0)
+- **Authentication**: `credentials.json` / `token.json` (`https://www.googleapis.com/auth/gmail.readonly`)
+- **Environment Variables**:
+  - `SOURCE_NAUKRI_ENABLED=true` (Default: `true`)
+  - `GMAIL_NAUKRI_QUERY="from:naukri.com subject:job"`
+- **ID Extraction**: `nk_<job_id>` from `naukri.com/job-listings-<id>` or `naukri.com/job-details-<id>`.
+- **Status**: `IMPLEMENTED`
+
+### 2.7 Glassdoor Email Alert Source
+- **Source Identifier**: `glassdoor_email`
+- **Class**: `GlassdoorAlertEmailSource` ([`app/sources/gmail/gmail_source.py`](file:///home/kamalesh/AI%20Job-Matching%20%26%20Monitoring%20Agent/app/sources/gmail/gmail_source.py))
+- **Parser**: `GlassdoorEmailParser` ([`app/sources/gmail/email_parser.py`](file:///home/kamalesh/AI%20Job-Matching%20%26%20Monitoring%20Agent/app/sources/gmail/email_parser.py))
+- **Access Endpoint**: Gmail API `users.messages.list` & `users.messages.get` (Read-only OAuth 2.0)
+- **Authentication**: `credentials.json` / `token.json` (`https://www.googleapis.com/auth/gmail.readonly`)
+- **Environment Variables**:
+  - `SOURCE_GLASSDOOR_ENABLED=true` (Default: `true`)
+  - `GMAIL_GLASSDOOR_QUERY="from:glassdoor.com subject:job"`
+- **ID Extraction**: `gd_<job_id>` from `glassdoor.com/job-listing/...` or `jl=<id>`.
+- **Status**: `IMPLEMENTED`
 
 ---
+
 
 ## 3. Deduplication & Normalization
 
