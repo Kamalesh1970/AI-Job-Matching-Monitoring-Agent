@@ -95,6 +95,10 @@ class Config:
     gmail_indeed_query: str = "from:(indeed.com) newer_than:2d"
     gmail_naukri_query: str = "from:(naukri.com) newer_than:2d"
     gmail_glassdoor_query: str = "from:(glassdoor.com) newer_than:2d"
+    gmail_unstop_query: str = "from:(unstop.com OR d2c.in) newer_than:2d"
+    gmail_foundit_query: str = "from:(foundit.in OR monsterindia.com) newer_than:2d"
+    gmail_cutshort_query: str = "from:(cutshort.io OR cutshort.com) newer_than:2d"
+    gmail_hirist_query: str = "from:(hirist.com OR hirist.tech) newer_than:2d"
     source_adzuna_enabled: bool = True
     source_internshala_enabled: bool = True
     source_gmail_enabled: bool = False
@@ -105,6 +109,10 @@ class Config:
     source_jooble_enabled: bool = True
     source_naukri_enabled: bool = True
     source_glassdoor_enabled: bool = True
+    source_unstop_enabled: bool = True
+    source_foundit_enabled: bool = True
+    source_cutshort_enabled: bool = True
+    source_hirist_enabled: bool = True
     jooble_api_key: str = ""
     llm_enabled: bool = False
     llm_provider: str = "gemini"
@@ -287,6 +295,10 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
     gmail_indeed_query = os.getenv("GMAIL_INDEED_QUERY", "from:(indeed.com) newer_than:2d").strip() or "from:(indeed.com) newer_than:2d"
     gmail_naukri_query = os.getenv("GMAIL_NAUKRI_QUERY", "from:(naukri.com) newer_than:2d").strip() or "from:(naukri.com) newer_than:2d"
     gmail_glassdoor_query = os.getenv("GMAIL_GLASSDOOR_QUERY", "from:(glassdoor.com) newer_than:2d").strip() or "from:(glassdoor.com) newer_than:2d"
+    gmail_unstop_query = os.getenv("GMAIL_UNSTOP_QUERY", "from:(unstop.com OR d2c.in) newer_than:2d").strip() or "from:(unstop.com OR d2c.in) newer_than:2d"
+    gmail_foundit_query = os.getenv("GMAIL_FOUNDIT_QUERY", "from:(foundit.in OR monsterindia.com) newer_than:2d").strip() or "from:(foundit.in OR monsterindia.com) newer_than:2d"
+    gmail_cutshort_query = os.getenv("GMAIL_CUTSHORT_QUERY", "from:(cutshort.io OR cutshort.com) newer_than:2d").strip() or "from:(cutshort.io OR cutshort.com) newer_than:2d"
+    gmail_hirist_query = os.getenv("GMAIL_HIRIST_QUERY", "from:(hirist.com OR hirist.tech) newer_than:2d").strip() or "from:(hirist.com OR hirist.tech) newer_than:2d"
 
     source_adzuna_enabled_env = os.getenv("SOURCE_ADZUNA_ENABLED", "true").strip().lower()
     source_adzuna_enabled = source_adzuna_enabled_env in ("true", "1", "yes")
@@ -323,6 +335,18 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
 
     source_glassdoor_env = os.getenv("SOURCE_GLASSDOOR_ENABLED", "true").strip().lower()
     source_glassdoor_enabled = source_glassdoor_env in ("true", "1", "yes")
+
+    source_unstop_env = os.getenv("SOURCE_UNSTOP_ENABLED", "true").strip().lower()
+    source_unstop_enabled = source_unstop_env in ("true", "1", "yes")
+
+    source_foundit_env = os.getenv("SOURCE_FOUNDIT_ENABLED", "true").strip().lower()
+    source_foundit_enabled = source_foundit_env in ("true", "1", "yes")
+
+    source_cutshort_env = os.getenv("SOURCE_CUTSHORT_ENABLED", "true").strip().lower()
+    source_cutshort_enabled = source_cutshort_env in ("true", "1", "yes")
+
+    source_hirist_env = os.getenv("SOURCE_HIRIST_ENABLED", "true").strip().lower()
+    source_hirist_enabled = source_hirist_env in ("true", "1", "yes")
 
     jooble_api_key = os.getenv("JOOBLE_API_KEY", "").strip()
 
@@ -385,6 +409,10 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
         gmail_indeed_query=gmail_indeed_query,
         gmail_naukri_query=gmail_naukri_query,
         gmail_glassdoor_query=gmail_glassdoor_query,
+        gmail_unstop_query=gmail_unstop_query,
+        gmail_foundit_query=gmail_foundit_query,
+        gmail_cutshort_query=gmail_cutshort_query,
+        gmail_hirist_query=gmail_hirist_query,
         source_adzuna_enabled=source_adzuna_enabled,
         source_internshala_enabled=source_internshala_enabled,
         source_gmail_enabled=source_gmail_enabled,
@@ -395,6 +423,10 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
         source_jooble_enabled=source_jooble_enabled,
         source_naukri_enabled=source_naukri_enabled,
         source_glassdoor_enabled=source_glassdoor_enabled,
+        source_unstop_enabled=source_unstop_enabled,
+        source_foundit_enabled=source_foundit_enabled,
+        source_cutshort_enabled=source_cutshort_enabled,
+        source_hirist_enabled=source_hirist_enabled,
         jooble_api_key=jooble_api_key,
         llm_enabled=llm_enabled,
         llm_provider=llm_provider,

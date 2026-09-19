@@ -6,10 +6,14 @@ from app.sources.adzuna import AdzunaJobSource
 from app.sources.arbeitnow import ArbeitnowJobSource
 from app.sources.base import BaseJobSource
 from app.sources.gmail import (
+    CutshortAlertEmailSource,
     GlassdoorAlertEmailSource,
+    HiristAlertEmailSource,
     IndeedAlertEmailSource,
     LinkedInAlertEmailSource,
     NaukriAlertEmailSource,
+    UnstopAlertEmailSource,
+    founditAlertEmailSource,
 )
 from app.sources.himalayas import HimalayasJobSource
 from app.sources.internshala import InternshalaJobSource
@@ -26,6 +30,10 @@ __all__ = [
     "IndeedAlertEmailSource",
     "NaukriAlertEmailSource",
     "GlassdoorAlertEmailSource",
+    "UnstopAlertEmailSource",
+    "founditAlertEmailSource",
+    "CutshortAlertEmailSource",
+    "HiristAlertEmailSource",
     "ArbeitnowJobSource",
     "RemoteOKJobSource",
     "JobicyJobSource",
@@ -34,3 +42,4 @@ __all__ = [
     "JobSourceRegistry",
     "create_default_source_registry",
 ]
+

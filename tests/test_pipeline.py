@@ -22,6 +22,7 @@ def mock_config(tmp_path):
         adzuna_max_pages=1,
         db_path=db_file,
         keywords=["AI Engineer", "Broken Keyword", "Data Scientist"],
+        internshala_enabled=False,
     )
 
 

@@ -19,6 +19,10 @@ This document provides official developer documentation for all job sources inte
 | **Jooble** | `jooble` | REST API | `POST https://jooble.org/api/{api_key}` | `JOOBLE_API_KEY` | Free Tier (API Key) | `REQUIRES_USER_SETUP` |
 | **Naukri Email** | `naukri_email` | Gmail API | Read-Only Gmail OAuth 2.0 (`gmail.readonly`) | `credentials.json` / `token.json` | Free | `IMPLEMENTED` |
 | **Glassdoor Email** | `glassdoor_email` | Gmail API | Read-Only Gmail OAuth 2.0 (`gmail.readonly`) | `credentials.json` / `token.json` | Free | `IMPLEMENTED` |
+| **Unstop Email** | `unstop_email` | Gmail API | Read-Only Gmail OAuth 2.0 (`gmail.readonly`) | `credentials.json` / `token.json` | Free | `IMPLEMENTED` |
+| **foundit Email** | `foundit_email` | Gmail API | Read-Only Gmail OAuth 2.0 (`gmail.readonly`) | `credentials.json` / `token.json` | Free | `IMPLEMENTED` |
+| **Cutshort Email** | `cutshort_email` | Gmail API | Read-Only Gmail OAuth 2.0 (`gmail.readonly`) | `credentials.json` / `token.json` | Free | `IMPLEMENTED` |
+| **Hirist Email** | `hirist_email` | Gmail API | Read-Only Gmail OAuth 2.0 (`gmail.readonly`) | `credentials.json` / `token.json` | Free | `IMPLEMENTED` |
 
 ---
 
@@ -85,6 +89,7 @@ This document provides official developer documentation for all job sources inte
   - `SOURCE_JOOBLE_ENABLED=true`
   - `JOOBLE_API_KEY=your_key_here`
 - **Rate Limits**: 500 requests/day on free tier.
+
 ### 2.6 Naukri Email Alert Source
 - **Source Identifier**: `naukri_email`
 - **Class**: `NaukriAlertEmailSource` ([`app/sources/gmail/gmail_source.py`](file:///home/kamalesh/AI%20Job-Matching%20%26%20Monitoring%20Agent/app/sources/gmail/gmail_source.py))
@@ -107,6 +112,54 @@ This document provides official developer documentation for all job sources inte
   - `SOURCE_GLASSDOOR_ENABLED=true` (Default: `true`)
   - `GMAIL_GLASSDOOR_QUERY="from:glassdoor.com subject:job"`
 - **ID Extraction**: `gd_<job_id>` from `glassdoor.com/job-listing/...` or `jl=<id>`.
+- **Status**: `IMPLEMENTED`
+
+### 2.8 Unstop Email Alert Source
+- **Source Identifier**: `unstop_email`
+- **Class**: `UnstopAlertEmailSource` ([`app/sources/gmail/gmail_source.py`](file:///home/kamalesh/AI%20Job-Matching%20%26%20Monitoring%20Agent/app/sources/gmail/gmail_source.py))
+- **Parser**: `UnstopEmailParser` ([`app/sources/gmail/email_parser.py`](file:///home/kamalesh/AI%20Job-Matching%20%26%20Monitoring%20Agent/app/sources/gmail/email_parser.py))
+- **Access Endpoint**: Gmail API `users.messages.list` & `users.messages.get` (Read-only OAuth 2.0)
+- **Authentication**: `credentials.json` / `token.json` (`https://www.googleapis.com/auth/gmail.readonly`)
+- **Environment Variables**:
+  - `SOURCE_UNSTOP_ENABLED=true` (Default: `true`)
+  - `GMAIL_UNSTOP_QUERY="from:(unstop.com OR d2c.in) subject:job"`
+- **ID Extraction**: `un_<job_id>` from `unstop.com/o/<id>` or `opportunityId=<id>`.
+- **Status**: `IMPLEMENTED`
+
+### 2.9 foundit Email Alert Source
+- **Source Identifier**: `foundit_email`
+- **Class**: `founditAlertEmailSource` ([`app/sources/gmail/gmail_source.py`](file:///home/kamalesh/AI%20Job-Matching%20%26%20Monitoring%20Agent/app/sources/gmail/gmail_source.py))
+- **Parser**: `founditEmailParser` ([`app/sources/gmail/email_parser.py`](file:///home/kamalesh/AI%20Job-Matching%20%26%20Monitoring%20Agent/app/sources/gmail/email_parser.py))
+- **Access Endpoint**: Gmail API `users.messages.list` & `users.messages.get` (Read-only OAuth 2.0)
+- **Authentication**: `credentials.json` / `token.json` (`https://www.googleapis.com/auth/gmail.readonly`)
+- **Environment Variables**:
+  - `SOURCE_FOUNDIT_ENABLED=true` (Default: `true`)
+  - `GMAIL_FOUNDIT_QUERY="from:(foundit.in OR monsterindia.com) subject:job"`
+- **ID Extraction**: `fm_<job_id>` from `foundit.in/job/<id>` or `jobId=<id>`.
+- **Status**: `IMPLEMENTED`
+
+### 2.10 Cutshort Email Alert Source
+- **Source Identifier**: `cutshort_email`
+- **Class**: `CutshortAlertEmailSource` ([`app/sources/gmail/gmail_source.py`](file:///home/kamalesh/AI%20Job-Matching%20%26%20Monitoring%20Agent/app/sources/gmail/gmail_source.py))
+- **Parser**: `CutshortEmailParser` ([`app/sources/gmail/email_parser.py`](file:///home/kamalesh/AI%20Job-Matching%20%26%20Monitoring%20Agent/app/sources/gmail/email_parser.py))
+- **Access Endpoint**: Gmail API `users.messages.list` & `users.messages.get` (Read-only OAuth 2.0)
+- **Authentication**: `credentials.json` / `token.json` (`https://www.googleapis.com/auth/gmail.readonly`)
+- **Environment Variables**:
+  - `SOURCE_CUTSHORT_ENABLED=true` (Default: `true`)
+  - `GMAIL_CUTSHORT_QUERY="from:(cutshort.io OR cutshort.com) subject:job"`
+- **ID Extraction**: `cs_<job_id>` from `cutshort.io/job/<id>` or `jobId=<id>`.
+- **Status**: `IMPLEMENTED`
+
+### 2.11 Hirist Email Alert Source
+- **Source Identifier**: `hirist_email`
+- **Class**: `HiristAlertEmailSource` ([`app/sources/gmail/gmail_source.py`](file:///home/kamalesh/AI%20Job-Matching%20%26%20Monitoring%20Agent/app/sources/gmail/gmail_source.py))
+- **Parser**: `HiristEmailParser` ([`app/sources/gmail/email_parser.py`](file:///home/kamalesh/AI%20Job-Matching%20%26%20Monitoring%20Agent/app/sources/gmail/email_parser.py))
+- **Access Endpoint**: Gmail API `users.messages.list` & `users.messages.get` (Read-only OAuth 2.0)
+- **Authentication**: `credentials.json` / `token.json` (`https://www.googleapis.com/auth/gmail.readonly`)
+- **Environment Variables**:
+  - `SOURCE_HIRIST_ENABLED=true` (Default: `true`)
+  - `GMAIL_HIRIST_QUERY="from:(hirist.com OR hirist.tech) subject:job"`
+- **ID Extraction**: `hi_<job_id>` from `hirist.tech/j/<id>` or `jobId=<id>`.
 - **Status**: `IMPLEMENTED`
 
 ---

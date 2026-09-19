@@ -11,10 +11,14 @@ from app.sources.adzuna import AdzunaJobSource
 from app.sources.arbeitnow import ArbeitnowJobSource
 from app.sources.base import BaseJobSource
 from app.sources.gmail import (
+    CutshortAlertEmailSource,
     GlassdoorAlertEmailSource,
+    HiristAlertEmailSource,
     IndeedAlertEmailSource,
     LinkedInAlertEmailSource,
     NaukriAlertEmailSource,
+    UnstopAlertEmailSource,
+    founditAlertEmailSource,
 )
 from app.sources.himalayas import HimalayasJobSource
 from app.sources.internshala import InternshalaJobSource
@@ -157,6 +161,30 @@ def create_default_source_registry(config: Optional[Config] = None) -> JobSource
             query_limit=config.gmail_query_limit,
         )
         registry.register(glassdoor_email)
+
+        unstop_email = UnstopAlertEmailSource(
+            query=config.gmail_unstop_query,
+            query_limit=config.gmail_query_limit,
+        )
+        registry.register(unstop_email)
+
+        foundit_email = founditAlertEmailSource(
+            query=config.gmail_foundit_query,
+            query_limit=config.gmail_query_limit,
+        )
+        registry.register(foundit_email)
+
+        cutshort_email = CutshortAlertEmailSource(
+            query=config.gmail_cutshort_query,
+            query_limit=config.gmail_query_limit,
+        )
+        registry.register(cutshort_email)
+
+        hirist_email = HiristAlertEmailSource(
+            query=config.gmail_hirist_query,
+            query_limit=config.gmail_query_limit,
+        )
+        registry.register(hirist_email)
 
         arbeitnow = ArbeitnowJobSource()
         registry.register(arbeitnow)
