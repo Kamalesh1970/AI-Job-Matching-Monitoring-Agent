@@ -112,6 +112,7 @@ class MatchResult:
     location_status: str = "UNKNOWN"    # MATCH, MISMATCH, UNKNOWN
     match_status: str = "MATCH"         # MATCH, PARTIAL_MATCH, FILTERED
     reasons: List[str] = field(default_factory=list)
+    draft_id: Optional[int] = None
     calculated_at: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )

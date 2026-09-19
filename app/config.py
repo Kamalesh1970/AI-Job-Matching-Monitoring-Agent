@@ -93,6 +93,14 @@ class Config:
     gmail_lookback_days: int = 2
     gmail_linkedin_query: str = "from:(linkedin.com) newer_than:2d"
     gmail_indeed_query: str = "from:(indeed.com) newer_than:2d"
+    llm_enabled: bool = False
+    llm_provider: str = "gemini"
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
+    openai_api_key: str = ""
+    openai_model: str = "gpt-5.6-luna"
+    llm_temperature: float = 0.2
+    llm_match_threshold: float = 0.75
 
 
     def __post_init__(self):
@@ -265,6 +273,25 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
     gmail_linkedin_query = os.getenv("GMAIL_LINKEDIN_QUERY", "from:(linkedin.com) newer_than:2d").strip() or "from:(linkedin.com) newer_than:2d"
     gmail_indeed_query = os.getenv("GMAIL_INDEED_QUERY", "from:(indeed.com) newer_than:2d").strip() or "from:(indeed.com) newer_than:2d"
 
+    llm_enabled_env = os.getenv("LLM_ENABLED", "false").strip().lower()
+    llm_enabled = llm_enabled_env in ("true", "1", "yes")
+
+    llm_provider = os.getenv("LLM_PROVIDER", "gemini").strip() or "gemini"
+    gemini_api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip() or "gemini-2.5-flash"
+    openai_api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    openai_model = os.getenv("OPENAI_MODEL", "gpt-5.6-luna").strip() or "gpt-5.6-luna"
+
+    try:
+        llm_temperature = float(os.getenv("LLM_TEMPERATURE", "0.2"))
+    except ValueError:
+        llm_temperature = 0.2
+
+    try:
+        llm_match_threshold = float(os.getenv("LLM_MATCH_THRESHOLD", "0.75"))
+    except ValueError:
+        llm_match_threshold = 0.75
+
     return Config(
         adzuna_app_id=app_id,
         adzuna_app_key=app_key,
@@ -303,6 +330,15 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
         gmail_lookback_days=gmail_lookback_days,
         gmail_linkedin_query=gmail_linkedin_query,
         gmail_indeed_query=gmail_indeed_query,
+        llm_enabled=llm_enabled,
+        llm_provider=llm_provider,
+        gemini_api_key=gemini_api_key,
+        gemini_model=gemini_model,
+        openai_api_key=openai_api_key,
+        openai_model=openai_model,
+        llm_temperature=llm_temperature,
+        llm_match_threshold=llm_match_threshold,
     )
+
 
 

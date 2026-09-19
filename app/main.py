@@ -6,8 +6,11 @@ and Phase 4 Scheduled Monitoring & Heartbeat Service.
 
 import argparse
 import logging
+import os
+import sqlite3
 import sys
 from typing import Dict, List, Optional
+
 
 from app.config import Config, load_config
 from app.db.database import (
@@ -15,12 +18,15 @@ from app.db.database import (
     get_jobs_map,
     get_notified_job_ids,
     get_stored_matches,
+    get_tailored_resume_by_id,
     initialize_database,
     insert_job,
     record_notifications,
     save_match_results,
+    update_tailored_resume_status,
 )
 from app.db.models import Job, MatchResult
+from app.llm.tailoring_service import ResumeTailoringService
 from app.scheduler.scheduler import PipelineScheduler
 from app.services.digest_service import DigestService
 from app.services.matching_service import MatchingService
@@ -29,6 +35,7 @@ from app.services.telegram_notifier import TelegramNotifier
 from app.sources.adzuna import AdzunaJobSource
 from app.sources.gmail import GmailAPIClient, IndeedAlertEmailSource, LinkedInAlertEmailSource
 from app.sources.internshala import InternshalaJobSource
+
 
 
 
@@ -462,7 +469,289 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         action="store_true",
         help="Run safe manual test for Gmail API job-alert ingestion",
     )
+    parser.add_argument(
+        "--tailor-resume",
+        type=int,
+        metavar="JOB_ID",
+        help="Trigger LLM resume tailoring for a specific job ID",
+    )
+    parser.add_argument(
+        "--review-resume",
+        type=int,
+        metavar="DRAFT_ID",
+        help="Interactively review and approve/reject a tailored resume draft",
+    )
+    parser.add_argument(
+        "--export-resume",
+        type=int,
+        metavar="DRAFT_ID",
+        help="Export an APPROVED tailored resume draft as Markdown",
+    )
     return parser.parse_args(args)
+
+
+
+def handle_tailor_resume(config: Config, job_id: int):
+    """
+    Triggers LLM resume tailoring for a specific job_id.
+    """
+    logger = logging.getLogger("app.main")
+    logger.info("Executing LLM resume tailoring for job ID: %d", job_id)
+    conn = initialize_database(config.db_path)
+
+    # Fetch job and match result
+    all_jobs = get_jobs_map(conn)
+    job = all_jobs.get(job_id)
+    if not job:
+        print(f"Error: Job ID {job_id} not found in database.")
+        conn.close()
+        return
+
+    matches = get_stored_matches(conn)
+    match = next((m for m in matches if m.job_id == job_id), None)
+    if not match:
+        print(f"Warning: No Phase 2 match calculation found for Job ID {job_id}. Running match evaluation...")
+        matching_service = MatchingService(config=config)
+        resume = matching_service.prepare_resume()
+        match = matching_service.evaluate_match(resume=resume, job=job)
+        save_match_results(conn, [match])
+
+    service = ResumeTailoringService(config=config)
+    result = service.tailor_resume_for_job(conn, job, match)
+    conn.close()
+
+    print("\nTAILORING RESULT SUMMARY")
+    print("========================")
+    print(f"Draft ID: {result.get('id')}")
+    print(f"Job: {job.title} at {job.company}")
+    print(f"Match Score: {match.final_score:.1f}%")
+    print(f"Status: {result.get('status')}")
+    if result.get("error"):
+        print(f"Error: {result.get('error')}")
+    print("========================\n")
+
+
+def handle_review_resume(config: Config, draft_id: int, input_func=input, conn: Optional[sqlite3.Connection] = None):
+    """
+    CLI interface for human review and approval/rejection of a tailored resume draft.
+    """
+    close_conn = False
+    if conn is None:
+        conn = initialize_database(config.db_path)
+        close_conn = True
+
+    try:
+        draft = get_tailored_resume_by_id(conn, draft_id)
+
+        if not draft:
+            print(f"Error: Tailored resume draft #{draft_id} not found.")
+            return
+
+        job_title = draft.get("job_title", "Unknown Position")
+        job_company = draft.get("job_company", "Not specified")
+        match_score = draft.get("match_score", 0.0)
+        status = draft.get("status", "UNKNOWN")
+        content = draft.get("resume_content") or {}
+        changes = draft.get("changes") or []
+        warnings = draft.get("warnings") or []
+        val_res = draft.get("validation_result") or {}
+
+        print("\n" + "=" * 50)
+        print("TAILORED RESUME REVIEW")
+        print("=" * 50)
+        print(f"\nJob: {job_title}")
+        print(f"Company: {job_company}")
+        print(f"Match Score: {match_score:.1f}%\n")
+
+        print("SUMMARY")
+        print("-" * 30)
+        print(content.get("summary", "No summary provided."))
+        print()
+
+        print("SKILLS")
+        print("-" * 30)
+        skills = content.get("skills") or []
+        if skills:
+            print(", ".join(skills))
+        else:
+            print("None")
+        print()
+
+        print("EXPERIENCE")
+        print("-" * 30)
+        exp_list = content.get("experience") or []
+        if exp_list:
+            for exp in exp_list:
+                if isinstance(exp, dict):
+                    print(f"• {exp.get('title', '')} at {exp.get('company', '')}")
+                    for b in exp.get("bullets", []):
+                        print(f"  - {b}")
+                else:
+                    print(f"• {exp}")
+        else:
+            print("None")
+        print()
+
+        print("PROJECTS")
+        print("-" * 30)
+        proj_list = content.get("projects") or []
+        if proj_list:
+            for proj in proj_list:
+                if isinstance(proj, dict):
+                    print(f"• {proj.get('name', '')}")
+                    for b in proj.get("bullets", []):
+                        print(f"  - {b}")
+                else:
+                    print(f"• {proj}")
+        else:
+            print("None")
+        print()
+
+        print("WARNINGS")
+        print("-" * 30)
+        if warnings:
+            for w in warnings:
+                print(f"- {w}")
+        else:
+            print("None")
+        print()
+
+        print("CHANGES")
+        print("-" * 30)
+        if changes:
+            for c in changes:
+                print(f"- {c}")
+        else:
+            print("None")
+        print()
+
+        print("VALIDATION")
+        print("-" * 30)
+        print(f"Status: {status}")
+        print(f"Valid: {val_res.get('valid', True)}")
+        violations = val_res.get("violations") or []
+        if violations:
+            print("Violations:")
+            for v in violations:
+                print(f"  ❌ {v}")
+        print()
+
+        print("Options:")
+        print(" [A] Approve")
+        print(" [R] Reject")
+        print(" [V] View validation details")
+        print(" [C] Cancel")
+
+        choice = input_func("\nSelect option [A/R/V/C]: ").strip().upper()
+
+        if choice == "A":
+            if status == "INVALID" or not val_res.get("valid", True):
+                print("\nError: Cannot approve an INVALID draft containing truth violations.")
+            else:
+                update_tailored_resume_status(conn, draft_id, "APPROVED")
+                print(f"\nDraft #{draft_id} APPROVED successfully.")
+        elif choice == "R":
+            update_tailored_resume_status(conn, draft_id, "REJECTED")
+            print(f"\nDraft #{draft_id} REJECTED.")
+        elif choice == "V":
+            print("\n--- DETAILED VALIDATION REPORT ---")
+            print(f"Valid: {val_res.get('valid', True)}")
+            print("Violations:")
+            for v in violations:
+                print(f"  - {v}")
+            print("Warnings:")
+            for w in val_res.get("warnings", []):
+                print(f"  - {w}")
+            print("-----------------------------------")
+        else:
+            print("\nReview cancelled. Status remains unchanged.")
+
+    finally:
+        if close_conn:
+            conn.close()
+
+
+def handle_export_resume(config: Config, draft_id: int, output_path: Optional[str] = None, conn: Optional[sqlite3.Connection] = None):
+    """
+    Exports an APPROVED tailored resume draft as Markdown.
+    Rejects exporting non-approved drafts.
+    """
+    close_conn = False
+    if conn is None:
+        conn = initialize_database(config.db_path)
+        close_conn = True
+
+    try:
+        draft = get_tailored_resume_by_id(conn, draft_id)
+
+        if not draft:
+            print(f"Error: Draft ID #{draft_id} not found.")
+            sys.exit(1)
+
+        status = draft.get("status")
+        if status != "APPROVED":
+            print(f"Export rejected: Only APPROVED tailored resume drafts can be exported (current status: {status}).")
+            return False
+
+        content = draft.get("resume_content") or {}
+        job_title = draft.get("job_title", "Position")
+
+        lines = [
+            f"# Tailored Resume - {job_title}",
+            "",
+            "## Professional Summary",
+            content.get("summary", ""),
+            "",
+            "## Technical Skills",
+        ]
+        for skill in content.get("skills", []):
+            lines.append(f"- {skill}")
+
+        lines.extend(["", "## Experience"])
+        for exp in content.get("experience", []):
+            if isinstance(exp, dict):
+                lines.append(f"### {exp.get('title', '')} | {exp.get('company', '')}")
+                for b in exp.get("bullets", []):
+                    lines.append(f"- {b}")
+            else:
+                lines.append(f"- {exp}")
+
+        lines.extend(["", "## Projects"])
+        for proj in content.get("projects", []):
+            if isinstance(proj, dict):
+                lines.append(f"### {proj.get('name', '')}")
+                for b in proj.get("bullets", []):
+                    lines.append(f"- {b}")
+            else:
+                lines.append(f"- {proj}")
+
+        lines.extend(["", "## Education"])
+        for edu in content.get("education", []):
+            if isinstance(edu, dict):
+                lines.append(f"- {edu.get('degree', '')} from {edu.get('institution', '')}")
+            else:
+                lines.append(f"- {edu}")
+
+        lines.extend(["", "## Certifications"])
+        for cert in content.get("certifications", []):
+            lines.append(f"- {cert}")
+
+        markdown_text = "\n".join(lines)
+
+        if not output_path:
+            os.makedirs("data/resume", exist_ok=True)
+            output_path = f"data/resume/tailored_resume_{draft_id}.md"
+
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(markdown_text)
+
+        print(f"Successfully exported approved tailored resume draft #{draft_id} to: {output_path}")
+        return True
+
+    finally:
+        if close_conn:
+            conn.close()
+
 
 
 def main():
@@ -478,6 +767,15 @@ def main():
 
     if parsed.gmail_test:
         run_gmail_test(config=config)
+
+    elif parsed.tailor_resume:
+        handle_tailor_resume(config=config, job_id=parsed.tailor_resume)
+
+    elif parsed.review_resume:
+        handle_review_resume(config=config, draft_id=parsed.review_resume)
+
+    elif parsed.export_resume:
+        handle_export_resume(config=config, draft_id=parsed.export_resume)
 
     elif parsed.scheduler:
         logger = logging.getLogger("app.main")
@@ -505,4 +803,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

@@ -81,7 +81,7 @@ class DigestService:
 
 
     def format_job_card(
-        self, match: MatchResult, job: Optional[Job] = None, index: int = 1
+        self, match: MatchResult, job: Optional[Job] = None, index: int = 1, draft_id: Optional[int] = None
     ) -> str:
         """
         Formats a single MatchResult and Job into a standard mobile-friendly readable card.
@@ -122,7 +122,14 @@ class DigestService:
             f"Source: {source}",
             f"Apply: {apply_url}",
         ]
+        if draft_id is not None:
+            lines.extend([
+                "",
+                f"Tailored resume draft #{draft_id} is ready for review.",
+            ])
+
         return "\n".join(lines)
+
 
     def format_header(self, total_matches: int, date_str: Optional[str] = None) -> str:
         """
@@ -173,7 +180,8 @@ class DigestService:
 
         for idx, match in enumerate(filtered, start=1):
             job = jobs_map.get(match.job_id) if match.job_id else None
-            card = self.format_job_card(match, job=job, index=idx)
+            draft_id = getattr(match, "draft_id", None)
+            card = self.format_job_card(match, job=job, index=idx, draft_id=draft_id)
 
             # Check if this is the first job card in the current chunk
             # If current_text already has content beyond header, we add separator

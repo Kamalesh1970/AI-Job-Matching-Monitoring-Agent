@@ -168,7 +168,37 @@ def initialize_database(db_path: str = "data/jobs.db") -> sqlite3.Connection:
             CREATE INDEX IF NOT EXISTS idx_source_runs_started ON source_runs(started_at);
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS tailored_resumes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id INTEGER NOT NULL,
+                match_score REAL NOT NULL,
+                provider TEXT NOT NULL,
+                model TEXT NOT NULL,
+                status TEXT NOT NULL,
+                resume_content TEXT,
+                changes TEXT,
+                warnings TEXT,
+                validation_result TEXT,
+                created_at TEXT NOT NULL,
+                reviewed_at TEXT,
+                FOREIGN KEY(job_id) REFERENCES jobs(id) ON DELETE CASCADE
+            );
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_tailored_resumes_job ON tailored_resumes(job_id);
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_tailored_resumes_status ON tailored_resumes(status);
+            """
+        )
     return conn
+
 
 
 
@@ -737,4 +767,139 @@ def get_last_source_run(conn: sqlite3.Connection, source: str) -> Optional[dict]
     if row:
         return dict(row)
     return None
+
+
+# ---------------------------------------------------------------------
+# Phase 7: Tailored Resumes DB Functions
+# ---------------------------------------------------------------------
+
+
+def save_tailored_resume(
+    conn: sqlite3.Connection,
+    job_id: int,
+    match_score: float,
+    provider: str,
+    model: str,
+    status: str,
+    resume_content: Optional[dict] = None,
+    changes: Optional[list] = None,
+    warnings: Optional[list] = None,
+    validation_result: Optional[dict] = None,
+    created_at: Optional[str] = None,
+) -> int:
+    """
+    Saves a new tailored resume draft record in tailored_resumes table.
+    """
+    if not created_at:
+        created_at = datetime.now(timezone.utc).isoformat()
+
+    resume_json = json.dumps(resume_content) if resume_content is not None else None
+    changes_json = json.dumps(changes) if changes is not None else None
+    warnings_json = json.dumps(warnings) if warnings is not None else None
+    validation_json = json.dumps(validation_result) if validation_result is not None else None
+
+    with conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO tailored_resumes (
+                job_id, match_score, provider, model, status,
+                resume_content, changes, warnings, validation_result, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                job_id,
+                match_score,
+                provider,
+                model,
+                status,
+                resume_json,
+                changes_json,
+                warnings_json,
+                validation_json,
+                created_at,
+            ),
+        )
+        return cursor.lastrowid
+
+
+def get_tailored_resume_by_id(
+    conn: sqlite3.Connection, draft_id: int
+) -> Optional[dict]:
+    """
+    Retrieves a tailored resume draft by its ID, joined with job information.
+    """
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT tr.*, j.title AS job_title, j.company AS job_company, j.location AS job_location,
+               j.description AS job_description, j.url AS job_url
+        FROM tailored_resumes tr
+        LEFT JOIN jobs j ON tr.job_id = j.id
+        WHERE tr.id = ?
+        """,
+        (draft_id,),
+    )
+    row = cursor.fetchone()
+    if not row:
+        return None
+    d = dict(row)
+    d["resume_content"] = json.loads(d["resume_content"]) if d["resume_content"] else None
+    d["changes"] = json.loads(d["changes"]) if d["changes"] else []
+    d["warnings"] = json.loads(d["warnings"]) if d["warnings"] else []
+    d["validation_result"] = json.loads(d["validation_result"]) if d["validation_result"] else None
+    return d
+
+
+def get_tailored_resumes_by_job(
+    conn: sqlite3.Connection, job_id: int
+) -> List[dict]:
+    """
+    Retrieves all tailored resume drafts for a specific job_id.
+    """
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT tr.*, j.title AS job_title, j.company AS job_company
+        FROM tailored_resumes tr
+        LEFT JOIN jobs j ON tr.job_id = j.id
+        WHERE tr.job_id = ?
+        ORDER BY tr.id DESC
+
+        """,
+        (job_id,),
+    )
+    results = []
+    for row in cursor.fetchall():
+        d = dict(row)
+        d["resume_content"] = json.loads(d["resume_content"]) if d["resume_content"] else None
+        d["changes"] = json.loads(d["changes"]) if d["changes"] else []
+        d["warnings"] = json.loads(d["warnings"]) if d["warnings"] else []
+        d["validation_result"] = json.loads(d["validation_result"]) if d["validation_result"] else None
+        results.append(d)
+    return results
+
+
+def update_tailored_resume_status(
+    conn: sqlite3.Connection,
+    draft_id: int,
+    status: str,
+    reviewed_at: Optional[str] = None,
+) -> bool:
+    """
+    Updates the status and optional reviewed_at timestamp of a tailored resume draft.
+    """
+    if reviewed_at is None and status in ("APPROVED", "REJECTED"):
+        reviewed_at = datetime.now(timezone.utc).isoformat()
+
+    with conn:
+        cursor = conn.execute(
+            """
+            UPDATE tailored_resumes
+            SET status = ?, reviewed_at = ?
+            WHERE id = ?
+            """,
+            (status, reviewed_at, draft_id),
+        )
+        return cursor.rowcount > 0
+
 

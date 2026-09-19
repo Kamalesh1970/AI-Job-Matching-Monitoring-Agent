@@ -32,6 +32,10 @@ class PipelineScheduler:
         self.scheduler = BackgroundScheduler(timezone="UTC")
         self._is_running = False
 
+    def is_running(self) -> bool:
+        """Returns True if the scheduler daemon process is currently running."""
+        return self._is_running and self.scheduler.running
+
     def scheduled_job_wrapper(self):
         """Wrapper method invoked by APScheduler to run the pipeline."""
         logger.info("APScheduler trigger fired: executing scheduled monitoring pipeline...")

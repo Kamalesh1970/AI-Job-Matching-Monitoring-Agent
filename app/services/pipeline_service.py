@@ -34,6 +34,8 @@ from app.services.telegram_notifier import TelegramNotifier
 from app.sources.adzuna import AdzunaJobSource
 from app.sources.gmail import GmailAPIClient, IndeedAlertEmailSource, LinkedInAlertEmailSource
 from app.sources.internshala import InternshalaJobSource
+from app.llm.tailoring_service import ResumeTailoringService
+
 
 
 logger = logging.getLogger("app.services.pipeline_service")
@@ -371,8 +373,30 @@ class PipelineService:
             critical_failure = True
 
         # ----------------------------------------------------
+        # Phase 7: Gemini API LLM Resume Tailoring
+        # ----------------------------------------------------
+        if cfg.llm_enabled and match_results:
+            logger.info("LLM Resume Tailoring is enabled. Processing strong matches...")
+            try:
+                tailoring_service = ResumeTailoringService(config=cfg)
+                all_jobs = get_jobs_map(conn)
+                raw_thresh = cfg.llm_match_threshold
+                eff_thresh = raw_thresh * 100.0 if raw_thresh <= 1.0 else raw_thresh
+
+                for match in match_results:
+                    if match.final_score >= eff_thresh and match.job_id:
+                        job = all_jobs.get(match.job_id)
+                        if job:
+                            tail_res = tailoring_service.tailor_resume_for_job(conn, job, match)
+                            if tail_res and tail_res.get("id"):
+                                match.draft_id = tail_res.get("id")
+            except Exception as e:
+                logger.error("Error during Phase 7 LLM Resume Tailoring: %s", str(e))
+
+        # ----------------------------------------------------
         # Phase 3: Telegram Digest
         # ----------------------------------------------------
+
         digest_failed = False
         try:
             if not match_results:
