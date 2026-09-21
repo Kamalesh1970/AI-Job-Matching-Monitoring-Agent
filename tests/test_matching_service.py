@@ -61,7 +61,7 @@ def test_matching_service_match_job():
 
 
 def test_matching_service_filtered_senior_role():
-    """Test that a senior role gets FILTERED status regardless of semantic similarity."""
+    """Test that senior AI roles get NOT_ELIGIBLE experience status while remaining visible, and non-AI roles get FILTERED."""
     cfg = Config(
         adzuna_app_id="dummy",
         adzuna_app_key="dummy",
@@ -76,7 +76,7 @@ def test_matching_service_filtered_senior_role():
         embedding=np.ones((384,), dtype=np.float32),
     )
 
-    job = Job(
+    ai_job = Job(
         id=2,
         source="Adzuna",
         source_job_id="j102",
@@ -84,10 +84,22 @@ def test_matching_service_filtered_senior_role():
         description="Requires 10+ years experience.",
     )
 
-    result = service.match_job(resume, job)
+    result = service.match_job(resume, ai_job)
 
-    assert result.match_status == "FILTERED"
+    assert result.experience_status == "NOT_ELIGIBLE"
+    assert result.match_category != "NOT_RELEVANT"
     assert len(result.reasons) > 0
+
+    non_ai_job = Job(
+        id=3,
+        source="Adzuna",
+        source_job_id="j103",
+        title="Senior Civil Engineer",
+        description="Construction management.",
+    )
+    non_ai_res = service.match_job(resume, non_ai_job)
+    assert non_ai_res.match_status == "FILTERED"
+    assert non_ai_res.match_category == "NOT_RELEVANT"
 
 
 def test_matching_service_batch_all_jobs_ranking():

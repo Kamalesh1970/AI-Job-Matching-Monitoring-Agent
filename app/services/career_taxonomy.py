@@ -199,6 +199,32 @@ def normalize_role_title(title: str) -> str:
     return text
 
 
+def is_ai_career_relevant(title: str, description: str = "") -> bool:
+    """
+    Determines whether a job listing is relevant to AI/ML/Data career taxonomy.
+    """
+    text = (title or "") + " " + (description or "")
+    if not text.strip():
+        return False
+
+    text_lower = text.lower()
+    for pattern in AI_RELEVANCE_PATTERNS:
+        if re.search(pattern, text_lower):
+            return True
+
+    norm_t = normalize_role_title(title)
+    if any(
+        norm_t == normalize_role_title(alias)
+        or re.search(r"\b" + re.escape(normalize_role_title(alias)) + r"\b", norm_t)
+        for family in AI_ROLE_TAXONOMY.values()
+        for aliases in family.values()
+        for alias in aliases
+    ):
+        return True
+
+    return False
+
+
 def classify_role_family(title: str, description: str = "") -> Tuple[Optional[str], Optional[str], float]:
     """
     Classifies a job title and description into a canonical role family and role name.
@@ -234,19 +260,3 @@ def classify_role_family(title: str, description: str = "") -> Tuple[Optional[st
         return "General AI/ML", "AI/ML Role", 0.50
 
     return None, None, 0.0
-
-
-def is_ai_career_relevant(title: str, description: str = "") -> bool:
-    """
-    Determines whether a job listing is relevant to AI/ML/Data career taxonomy.
-    """
-    text = (title or "") + " " + (description or "")
-    if not text.strip():
-        return False
-
-    text_lower = text.lower()
-    for pattern in AI_RELEVANCE_PATTERNS:
-        if re.search(pattern, text_lower):
-            return True
-
-    return False

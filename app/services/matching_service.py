@@ -84,9 +84,12 @@ class MatchingService:
         is_relevant = is_ai_career_relevant(job.title, job.description)
         
         if is_relevant or role_family:
+            is_relevant = True
+            role_family = role_family or "General AI/ML"
+            canonical_role = canonical_role or "AI/ML Role"
             role_score = 100.0
         else:
-            role_score = 30.0
+            role_score = 0.0
 
         rule_eval = evaluate_rules(
             title=job.title,
@@ -116,18 +119,18 @@ class MatchingService:
         final_score = round(max(0.0, min(100.0, raw_final_score)), 1)
         overall_score = final_score
 
-        # 6. Category assignment
-        if overall_score >= getattr(self.config, "match_threshold_strong", 75.0):
+        # 6. Category assignment (NOT_RELEVANT only for non-AI jobs)
+        if not is_relevant:
+            match_category = "NOT_RELEVANT"
+        elif overall_score >= getattr(self.config, "match_threshold_strong", 75.0):
             match_category = "STRONG_MATCH"
         elif overall_score >= getattr(self.config, "match_threshold_potential", 50.0):
             match_category = "POTENTIAL_MATCH"
-        elif overall_score >= getattr(self.config, "match_threshold_low", 30.0):
-            match_category = "LOW_MATCH"
         else:
-            match_category = "NOT_RELEVANT"
+            match_category = "LOW_MATCH"
 
-        # Legacy status assignment
-        if rule_eval.is_hard_filtered:
+        # Match status assignment (Experience does NOT filter out AI jobs)
+        if not is_relevant:
             match_status = "FILTERED"
         elif final_score >= self.config.min_match_score:
             match_status = "MATCH"

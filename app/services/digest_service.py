@@ -97,6 +97,10 @@ class DigestService:
         exp_val = getattr(match, "experience_match", None) or match.experience_status
         if exp_val in ("MATCH", "POSSIBLE_MATCH"):
             exp_str = "Fresher eligible"
+        elif exp_val == "EXPERIENCE_GAP":
+            exp_str = "⚠️ EXPERIENCE GAP"
+        elif exp_val == "NOT_ELIGIBLE":
+            exp_str = "❌ NOT ELIGIBLE"
         else:
             exp_str = exp_val or "Fresher eligible"
 
