@@ -28,7 +28,7 @@ class DigestService:
 
     def __init__(
         self,
-        min_score: float = 70.0,
+        min_score: float = 30.0,
         max_jobs: int = 10,
         send_empty: bool = False,
         max_msg_len: int = 4000,
@@ -38,7 +38,7 @@ class DigestService:
         Initializes DigestService with thresholds and options.
         """
         if config:
-            self.min_score = config.telegram_min_match_score
+            self.min_score = getattr(config, "match_threshold_low", config.telegram_min_match_score)
             self.max_jobs = config.telegram_max_jobs_per_digest
             self.send_empty = config.send_empty_digest
         else:
@@ -59,7 +59,9 @@ class DigestService:
         eligible = [
             m
             for m in matches
-            if m.final_score >= self.min_score and m.match_status != "FILTERED"
+            if getattr(m, "match_category", None) != "NOT_RELEVANT"
+            and m.match_status != "FILTERED"
+            and m.final_score >= self.min_score
         ]
         eligible.sort(key=lambda m: m.final_score, reverse=True)
 
@@ -79,7 +81,6 @@ class DigestService:
 
         return deduped[: self.max_jobs]
 
-
     def format_job_card(
         self, match: MatchResult, job: Optional[Job] = None, index: int = 1, draft_id: Optional[int] = None
     ) -> str:
@@ -92,36 +93,65 @@ class DigestService:
         source = job.source if job else "Adzuna"
         apply_url = (job.url if job and job.url else "") or "N/A"
 
-        matched_skills_str = (
-            ", ".join(match.matched_skills) if match.matched_skills else "None"
-        )
-        missing_skills_str = (
-            ", ".join(match.missing_skills) if match.missing_skills else "None"
-        )
+        category = getattr(match, "match_category", "STRONG_MATCH") or "STRONG_MATCH"
+        exp_val = getattr(match, "experience_match", None) or match.experience_status
+        if exp_val in ("MATCH", "POSSIBLE_MATCH"):
+            exp_str = "Fresher eligible"
+        else:
+            exp_str = exp_val or "Fresher eligible"
+
+        matched_skills = match.matched_skills or []
+        skill_gaps = getattr(match, "skill_gaps", None) or match.missing_skills or []
+
+        matched_skills_str = ", ".join(matched_skills) if matched_skills else "None"
+        missing_skills_str = ", ".join(skill_gaps) if skill_gaps else "None"
 
         skill_pct = int(round(match.skill_score * 100))
 
-        lines = [
-            f"{index}. {title}",
-            f"Company: {company}",
-            f"Location: {location}",
-            "",
-            f"Match Score: {match.final_score:.1f}/100",
-            f"Semantic: {match.similarity_score:.2f}",
-            f"Skill Match: {skill_pct}%",
-            "",
-            "Matched:",
-            matched_skills_str,
-            "",
-            "Missing:",
-            missing_skills_str,
-            "",
-            f"Experience: {match.experience_status}",
-            f"Location: {match.location_status}",
-            "",
-            f"Source: {source}",
-            f"Apply: {apply_url}",
-        ]
+        if category in ("LOW_MATCH", "POTENTIAL_MATCH"):
+            header_tag = "LOW AI JOB MATCH" if category == "LOW_MATCH" else "POTENTIAL AI JOB MATCH"
+            lines = [
+                header_tag,
+                "",
+                f"Role: {title}",
+                f"Company: {company}",
+                f"Match Score: {int(round(match.final_score))}%",
+                "",
+                "Experience:",
+                exp_str,
+                "",
+                "Matched Skills:",
+                "\n".join(matched_skills) if matched_skills else "None",
+                "",
+                "Skill Gaps:",
+                "\n".join(skill_gaps) if skill_gaps else "None",
+                "",
+                "Apply:",
+                apply_url,
+            ]
+        else:
+            lines = [
+                f"{index}. {title}",
+                f"Company: {company}",
+                f"Location: {location}",
+                "",
+                f"Match Score: {match.final_score:.1f}/100",
+                f"Semantic: {match.similarity_score:.2f}",
+                f"Skill Match: {skill_pct}%",
+                "",
+                "Matched:",
+                matched_skills_str,
+                "",
+                "Missing:",
+                missing_skills_str,
+                "",
+                f"Experience: {match.experience_status}",
+                f"Location: {match.location_status}",
+                "",
+                f"Source: {source}",
+                f"Apply: {apply_url}",
+            ]
+
         if draft_id is not None:
             lines.extend([
                 "",

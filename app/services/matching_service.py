@@ -8,6 +8,7 @@ from typing import List, Optional
 
 from app.config import Config
 from app.db.models import Job, MatchResult, Resume
+from app.services.career_taxonomy import classify_role_family, is_ai_career_relevant
 from app.services.embedding_service import EmbeddingService
 from app.services.resume_loader import load_resume
 from app.services.rule_matcher import evaluate_rules
@@ -78,7 +79,15 @@ class MatchingService:
             resume_skills=resume.skills, job_skills=job_skills
         )
 
-        # 3. Rule evaluation
+        # 3. Taxonomy classification & Rule evaluation
+        role_family, canonical_role, role_tax_score = classify_role_family(job.title, job.description)
+        is_relevant = is_ai_career_relevant(job.title, job.description)
+        
+        if is_relevant or role_family:
+            role_score = 100.0
+        else:
+            role_score = 30.0
+
         rule_eval = evaluate_rules(
             title=job.title,
             description=job.description,
@@ -105,8 +114,19 @@ class MatchingService:
         ) * 100.0
 
         final_score = round(max(0.0, min(100.0, raw_final_score)), 1)
+        overall_score = final_score
 
-        # 6. Status assignment
+        # 6. Category assignment
+        if overall_score >= getattr(self.config, "match_threshold_strong", 75.0):
+            match_category = "STRONG_MATCH"
+        elif overall_score >= getattr(self.config, "match_threshold_potential", 50.0):
+            match_category = "POTENTIAL_MATCH"
+        elif overall_score >= getattr(self.config, "match_threshold_low", 30.0):
+            match_category = "LOW_MATCH"
+        else:
+            match_category = "NOT_RELEVANT"
+
+        # Legacy status assignment
         if rule_eval.is_hard_filtered:
             match_status = "FILTERED"
         elif final_score >= self.config.min_match_score:
@@ -130,6 +150,16 @@ class MatchingService:
             location_status=rule_eval.location_status,
             match_status=match_status,
             reasons=rule_eval.reasons,
+            match_category=match_category,
+            role_family=role_family,
+            canonical_role=canonical_role,
+            experience_match=rule_eval.experience_status,
+            skill_gaps=sorted(list(missing_skills)),
+            role_score=round(role_score, 2),
+            experience_score=round(rule_eval.experience_score * 100.0, 2),
+            education_score=round(rule_eval.education_score * 100.0, 2),
+            location_score=round(rule_eval.location_score * 100.0, 2),
+            seniority_score=round(rule_eval.seniority_score * 100.0, 2),
         )
 
     def match_all_jobs(

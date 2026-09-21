@@ -76,6 +76,12 @@ class Config:
     preferred_locations: List[str] = field(
         default_factory=lambda: list(DEFAULT_PREFERRED_LOCATIONS)
     )
+    candidate_experience_level: str = "FRESHER"
+    candidate_years_experience: int = 0
+    candidate_status: str = "FINAL_YEAR_STUDENT"
+    match_threshold_strong: float = 75.0
+    match_threshold_potential: float = 50.0
+    match_threshold_low: float = 30.0
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
     telegram_min_match_score: float = 70.0
@@ -403,7 +409,12 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
         skill_weight=skill_weight,
         rule_weight=rule_weight,
         min_match_score=min_match_score,
-        preferred_locations=preferred_locations,
+        candidate_experience_level=os.getenv("CANDIDATE_EXPERIENCE_LEVEL", "FRESHER").strip() or "FRESHER",
+        candidate_years_experience=int(os.getenv("CANDIDATE_YEARS_EXPERIENCE", "0")),
+        candidate_status=os.getenv("CANDIDATE_STATUS", "FINAL_YEAR_STUDENT").strip() or "FINAL_YEAR_STUDENT",
+        match_threshold_strong=float(os.getenv("MATCH_THRESHOLD_STRONG", "75.0")),
+        match_threshold_potential=float(os.getenv("MATCH_THRESHOLD_POTENTIAL", "50.0")),
+        match_threshold_low=float(os.getenv("MATCH_THRESHOLD_LOW", "30.0")),
         telegram_bot_token=telegram_bot_token,
         telegram_chat_id=telegram_chat_id,
         telegram_min_match_score=telegram_min_match_score,

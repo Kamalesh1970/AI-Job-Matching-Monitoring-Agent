@@ -79,11 +79,42 @@ def initialize_database(db_path: str = "data/jobs.db") -> sqlite3.Connection:
                 missing_skills TEXT,
                 reasons TEXT,
                 calculated_at TEXT NOT NULL,
+                match_category TEXT,
+                role_family TEXT,
+                canonical_role TEXT,
+                experience_match TEXT,
+                skill_gaps TEXT,
+                role_score REAL,
+                experience_score REAL,
+                education_score REAL,
+                location_score REAL,
+                seniority_score REAL,
+                overall_score REAL,
                 FOREIGN KEY(job_id) REFERENCES jobs(id) ON DELETE CASCADE,
                 UNIQUE(job_id)
             );
             """
         )
+        # Idempotent migration for existing database schema
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(job_matches)")
+        existing_cols = {row["name"] for row in cursor.fetchall()}
+        new_cols = [
+            ("match_category", "TEXT"),
+            ("role_family", "TEXT"),
+            ("canonical_role", "TEXT"),
+            ("experience_match", "TEXT"),
+            ("skill_gaps", "TEXT"),
+            ("role_score", "REAL"),
+            ("experience_score", "REAL"),
+            ("education_score", "REAL"),
+            ("location_score", "REAL"),
+            ("seniority_score", "REAL"),
+            ("overall_score", "REAL"),
+        ]
+        for col_name, col_type in new_cols:
+            if col_name not in existing_cols:
+                conn.execute(f"ALTER TABLE job_matches ADD COLUMN {col_name} {col_type}")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS job_notifications (
@@ -386,13 +417,17 @@ def save_match_result(conn: sqlite3.Connection, match: MatchResult) -> bool:
     if not match.job_id:
         return False
 
+    skill_gaps_val = json.dumps(match.skill_gaps) if match.skill_gaps is not None else json.dumps(match.missing_skills)
+
     with conn:
         conn.execute(
             """
             INSERT INTO job_matches (
                 job_id, similarity_score, skill_score, rule_score, final_score,
-                match_status, matched_skills, missing_skills, reasons, calculated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                match_status, matched_skills, missing_skills, reasons, calculated_at,
+                match_category, role_family, canonical_role, experience_match, skill_gaps,
+                role_score, experience_score, education_score, location_score, seniority_score, overall_score
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(job_id) DO UPDATE SET
                 similarity_score=excluded.similarity_score,
                 skill_score=excluded.skill_score,
@@ -402,7 +437,18 @@ def save_match_result(conn: sqlite3.Connection, match: MatchResult) -> bool:
                 matched_skills=excluded.matched_skills,
                 missing_skills=excluded.missing_skills,
                 reasons=excluded.reasons,
-                calculated_at=excluded.calculated_at
+                calculated_at=excluded.calculated_at,
+                match_category=excluded.match_category,
+                role_family=excluded.role_family,
+                canonical_role=excluded.canonical_role,
+                experience_match=excluded.experience_match,
+                skill_gaps=excluded.skill_gaps,
+                role_score=excluded.role_score,
+                experience_score=excluded.experience_score,
+                education_score=excluded.education_score,
+                location_score=excluded.location_score,
+                seniority_score=excluded.seniority_score,
+                overall_score=excluded.overall_score
             """,
             (
                 match.job_id,
@@ -415,6 +461,17 @@ def save_match_result(conn: sqlite3.Connection, match: MatchResult) -> bool:
                 json.dumps(match.missing_skills),
                 json.dumps(match.reasons),
                 match.calculated_at,
+                match.match_category,
+                match.role_family,
+                match.canonical_role,
+                match.experience_match or match.experience_status,
+                skill_gaps_val,
+                match.role_score,
+                match.experience_score,
+                match.education_score,
+                match.location_score,
+                match.seniority_score,
+                match.overall_score or match.final_score,
             ),
         )
     return True
@@ -444,9 +501,13 @@ def get_stored_matches(conn: sqlite3.Connection) -> List[MatchResult]:
     )
     results = []
     for row in cursor.fetchall():
+        keys = row.keys()
         matched_skills = json.loads(row["matched_skills"]) if row["matched_skills"] else []
         missing_skills = json.loads(row["missing_skills"]) if row["missing_skills"] else []
         reasons = json.loads(row["reasons"]) if row["reasons"] else []
+        skill_gaps_str = row["skill_gaps"] if "skill_gaps" in keys else None
+        skill_gaps = json.loads(skill_gaps_str) if skill_gaps_str else missing_skills
+
         results.append(
             MatchResult(
                 job_id=row["job_id"],
@@ -463,6 +524,16 @@ def get_stored_matches(conn: sqlite3.Connection) -> List[MatchResult]:
                 missing_skills=missing_skills,
                 reasons=reasons,
                 calculated_at=row["calculated_at"],
+                match_category=row["match_category"] if "match_category" in keys and row["match_category"] else "NOT_RELEVANT",
+                role_family=row["role_family"] if "role_family" in keys else None,
+                canonical_role=row["canonical_role"] if "canonical_role" in keys else None,
+                experience_match=row["experience_match"] if "experience_match" in keys and row["experience_match"] else "NOT_ELIGIBLE",
+                skill_gaps=skill_gaps,
+                role_score=row["role_score"] if "role_score" in keys and row["role_score"] is not None else 0.0,
+                experience_score=row["experience_score"] if "experience_score" in keys and row["experience_score"] is not None else 0.0,
+                education_score=row["education_score"] if "education_score" in keys and row["education_score"] is not None else 0.0,
+                location_score=row["location_score"] if "location_score" in keys and row["location_score"] is not None else 0.0,
+                seniority_score=row["seniority_score"] if "seniority_score" in keys and row["seniority_score"] is not None else 0.0,
             )
         )
     return results

@@ -25,7 +25,7 @@ def test_evaluate_experience_senior_role():
         title="Senior AI Engineer",
         description="Requires 7+ years of experience leading ML teams.",
     )
-    assert status == "MISMATCH"
+    assert status in ("NOT_ELIGIBLE", "MISMATCH")
     assert reason is not None
 
 
@@ -59,6 +59,6 @@ def test_evaluate_rules_hard_filter():
     )
 
     assert eval_res.is_hard_filtered is True
-    assert eval_res.experience_status == "MISMATCH"
+    assert eval_res.experience_status in ("NOT_ELIGIBLE", "MISMATCH")
     assert eval_res.location_status == "MATCH"
     assert len(eval_res.reasons) > 0

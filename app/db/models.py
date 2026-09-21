@@ -128,9 +128,25 @@ class MatchResult:
     match_status: str = "MATCH"         # MATCH, PARTIAL_MATCH, FILTERED
     reasons: List[str] = field(default_factory=list)
     draft_id: Optional[int] = None
+    # Phase 10.6.1 Career Intelligence & Match Breakdown fields
+    match_category: str = "STRONG_MATCH"  # STRONG_MATCH, POTENTIAL_MATCH, LOW_MATCH, NOT_RELEVANT
+    role_family: Optional[str] = None
+    canonical_role: Optional[str] = None
+    experience_match: str = "MATCH"       # MATCH, POSSIBLE_MATCH, EXPERIENCE_GAP, NOT_ELIGIBLE
+    skill_gaps: List[str] = field(default_factory=list)
+    role_score: float = 0.0
+    experience_score: float = 0.0
+    education_score: float = 100.0        # Default fallback for fresher degree match
+    location_score: float = 0.0
+    seniority_score: float = 0.0
     calculated_at: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
+
+    @property
+    def overall_score(self) -> float:
+        """Alias for final_score."""
+        return self.final_score
 
     def to_dict(self) -> dict:
         """Converts MatchResult to dictionary format."""
@@ -144,11 +160,22 @@ class MatchResult:
             "skill_score": self.skill_score,
             "rule_score": self.rule_score,
             "final_score": self.final_score,
+            "overall_score": self.final_score,
             "matched_skills": self.matched_skills,
             "missing_skills": self.missing_skills,
+            "skill_gaps": self.skill_gaps or self.missing_skills,
             "experience_status": self.experience_status,
             "location_status": self.location_status,
             "match_status": self.match_status,
+            "match_category": self.match_category,
+            "role_family": self.role_family,
+            "canonical_role": self.canonical_role,
+            "experience_match": self.experience_match,
+            "role_score": self.role_score,
+            "experience_score": self.experience_score,
+            "education_score": self.education_score,
+            "location_score": self.location_score,
+            "seniority_score": self.seniority_score,
             "reasons": self.reasons,
             "calculated_at": self.calculated_at,
         }

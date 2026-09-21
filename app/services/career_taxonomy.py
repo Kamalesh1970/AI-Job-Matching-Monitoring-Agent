@@ -209,21 +209,25 @@ def classify_role_family(title: str, description: str = "") -> Tuple[Optional[st
     norm_title = normalize_role_title(title)
     norm_desc = normalize_role_title(description[:500]) if description else ""
 
-    # First attempt exact alias match on title
+    # Build flat list of (norm_alias, family_name, canonical_role) sorted by len(norm_alias) DESC
+    alias_entries = []
     for family_name, roles in AI_ROLE_TAXONOMY.items():
         for canonical_role, aliases in roles.items():
             for alias in aliases:
                 norm_alias = normalize_role_title(alias)
-                if norm_alias == norm_title or re.search(r"\b" + re.escape(norm_alias) + r"\b", norm_title):
-                    return family_name, canonical_role, 1.0
+                alias_entries.append((norm_alias, family_name, canonical_role))
 
-    # Second attempt fuzzy alias match on title/description
-    for family_name, roles in AI_ROLE_TAXONOMY.items():
-        for canonical_role, aliases in roles.items():
-            for alias in aliases:
-                norm_alias = normalize_role_title(alias)
-                if norm_desc and re.search(r"\b" + re.escape(norm_alias) + r"\b", norm_desc):
-                    return family_name, canonical_role, 0.75
+    alias_entries.sort(key=lambda x: len(x[0]), reverse=True)
+
+    # First attempt exact / substring alias match on title (longest alias first)
+    for norm_alias, family_name, canonical_role in alias_entries:
+        if norm_alias == norm_title or re.search(r"\b" + re.escape(norm_alias) + r"\b", norm_title):
+            return family_name, canonical_role, 1.0
+
+    # Second attempt fuzzy alias match on description
+    for norm_alias, family_name, canonical_role in alias_entries:
+        if norm_desc and re.search(r"\b" + re.escape(norm_alias) + r"\b", norm_desc):
+            return family_name, canonical_role, 0.75
 
     # Check for general AI relevance if no specific taxonomy match
     if is_ai_career_relevant(title, description):
