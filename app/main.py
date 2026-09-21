@@ -487,6 +487,11 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         metavar="DRAFT_ID",
         help="Export an APPROVED tailored resume draft as Markdown",
     )
+    parser.add_argument(
+        "--server",
+        action="store_true",
+        help="Run Phase 11 FastAPI Web UI backend server",
+    )
     return parser.parse_args(args)
 
 
@@ -765,7 +770,13 @@ def main():
         logging.error("Configuration error: %s", str(e))
         sys.exit(1)
 
-    if parsed.gmail_test:
+    if parsed.server:
+        import uvicorn
+        logger = logging.getLogger("app.main")
+        logger.info("Launching Phase 11 FastAPI Web UI backend server on http://localhost:8000 ...")
+        uvicorn.run("app.api.app:app", host="0.0.0.0", port=8000, reload=False)
+
+    elif parsed.gmail_test:
         run_gmail_test(config=config)
 
     elif parsed.tailor_resume:

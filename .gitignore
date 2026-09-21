@@ -35,4 +35,10 @@ credentials.json
 token.json
 client_secret*.json
 client_secret_708256995459-tle5o410j3c4ibi64joubpps5oi1jak1.apps.googleusercontent.com.json
-token.json
+
+# Frontend build & dependencies
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.vite/
+

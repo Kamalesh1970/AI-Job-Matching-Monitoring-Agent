@@ -661,6 +661,19 @@ def record_pipeline_finish(
         return cursor.rowcount > 0
 
 
+def _format_pipeline_run_dict(row: Optional[sqlite3.Row]) -> Optional[dict]:
+    """Formats pipeline run DB row into dictionary with deferred fields."""
+    if not row:
+        return None
+    d = dict(row)
+    eligible = d.get("eligible_notifications", 0) or 0
+    sent = d.get("notifications_sent", 0) or 0
+    d["notifications_eligible"] = eligible
+    d["notifications_deferred"] = max(0, eligible - sent)
+    d["notifications_failed"] = 0
+    return d
+
+
 def get_last_pipeline_run(conn: sqlite3.Connection) -> Optional[dict]:
     """
     Retrieves the most recent pipeline run record.
@@ -670,9 +683,7 @@ def get_last_pipeline_run(conn: sqlite3.Connection) -> Optional[dict]:
         "SELECT * FROM pipeline_runs ORDER BY id DESC LIMIT 1"
     )
     row = cursor.fetchone()
-    if row:
-        return dict(row)
-    return None
+    return _format_pipeline_run_dict(row)
 
 
 def get_last_successful_pipeline_run(conn: sqlite3.Connection) -> Optional[dict]:
@@ -688,9 +699,7 @@ def get_last_successful_pipeline_run(conn: sqlite3.Connection) -> Optional[dict]
         """
     )
     row = cursor.fetchone()
-    if row:
-        return dict(row)
-    return None
+    return _format_pipeline_run_dict(row)
 
 
 def record_health_alert(

@@ -65,8 +65,15 @@ class PipelineRunSummary:
     matches_found: int = 0
     eligible_notifications: int = 0
     notifications_sent: int = 0
+    notifications_deferred: int = 0
+    notifications_failed: int = 0
     failed_sources: int = 0
     error_message: Optional[str] = None
+
+    @property
+    def notifications_eligible(self) -> int:
+        """Alias for eligible_notifications for API / consumer compatibility."""
+        return self.eligible_notifications
 
 
 class PipelineService:
@@ -90,7 +97,9 @@ class PipelineService:
         print(f"Existing jobs: {summary.existing_jobs}\n")
         print(f"Matches found: {summary.matches_found}")
         print(f"Eligible notifications: {summary.eligible_notifications}")
-        print(f"Notifications sent: {summary.notifications_sent}\n")
+        print(f"Notifications sent: {summary.notifications_sent}")
+        print(f"Notifications deferred: {summary.notifications_deferred}")
+        print(f"Notifications failed: {summary.notifications_failed}\n")
         print(f"Failed sources: {summary.failed_sources}")
         if summary.error_message:
             print(f"Error message: {summary.error_message}")
@@ -397,6 +406,8 @@ class PipelineService:
         # Phase 3: Telegram Digest
         # ----------------------------------------------------
 
+        notifications_sent = 0
+        notifications_failed = 0
         digest_failed = False
         try:
             if not match_results:
@@ -405,8 +416,9 @@ class PipelineService:
             eligible = [
                 m
                 for m in match_results
-                if m.final_score >= cfg.telegram_min_match_score
+                if getattr(m, "match_category", None) != "NOT_RELEVANT"
                 and m.match_status != "FILTERED"
+                and m.final_score >= cfg.telegram_min_match_score
             ]
 
             notified_set = get_notified_job_ids(conn, notification_type="telegram_digest")
@@ -431,11 +443,16 @@ class PipelineService:
                             conn, chunk.job_ids, notification_type="telegram_digest"
                         )
                     else:
+                        notifications_failed += len(chunk.job_ids)
                         digest_failed = True
 
         except Exception as e:
             logger.error("Error during Phase 3 Telegram digest: %s", str(e))
             digest_failed = True
+
+        notifications_deferred = max(
+            0, eligible_notifications - notifications_sent - notifications_failed
+        )
 
         # ----------------------------------------------------
         # Overall Status Determination
@@ -445,7 +462,7 @@ class PipelineService:
         elif (
             failed_sources > 0
             or digest_failed
-            or (eligible_notifications > 0 and notifications_sent < eligible_notifications)
+            or notifications_failed > 0
         ):
             overall_status = PipelineStatus.PARTIAL_FAILURE
         else:
@@ -481,6 +498,8 @@ class PipelineService:
             matches_found=matches_found,
             eligible_notifications=eligible_notifications,
             notifications_sent=notifications_sent,
+            notifications_deferred=notifications_deferred,
+            notifications_failed=notifications_failed,
             failed_sources=failed_sources,
             error_message=error_message,
         )
