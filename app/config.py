@@ -103,6 +103,8 @@ class Config:
     source_adzuna_enabled: bool = True
     source_internshala_enabled: bool = True
     source_gmail_enabled: bool = False
+    source_linkedin_enabled: bool = True
+    source_indeed_enabled: bool = True
     source_arbeitnow_enabled: bool = True
     source_remoteok_enabled: bool = True
     source_jobicy_enabled: bool = True
@@ -318,6 +320,12 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
     else:
         source_gmail_enabled = gmail_enabled
 
+    source_linkedin_env = os.getenv("SOURCE_LINKEDIN_ENABLED", "true").strip().lower()
+    source_linkedin_enabled = source_linkedin_env in ("true", "1", "yes")
+
+    source_indeed_env = os.getenv("SOURCE_INDEED_ENABLED", "true").strip().lower()
+    source_indeed_enabled = source_indeed_env in ("true", "1", "yes")
+
     source_arbeitnow_env = os.getenv("SOURCE_ARBEITNOW_ENABLED", "true").strip().lower()
     source_arbeitnow_enabled = source_arbeitnow_env in ("true", "1", "yes")
 
@@ -423,6 +431,8 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
         source_adzuna_enabled=source_adzuna_enabled,
         source_internshala_enabled=source_internshala_enabled,
         source_gmail_enabled=source_gmail_enabled,
+        source_linkedin_enabled=source_linkedin_enabled,
+        source_indeed_enabled=source_indeed_enabled,
         source_arbeitnow_enabled=source_arbeitnow_enabled,
         source_remoteok_enabled=source_remoteok_enabled,
         source_jobicy_enabled=source_jobicy_enabled,

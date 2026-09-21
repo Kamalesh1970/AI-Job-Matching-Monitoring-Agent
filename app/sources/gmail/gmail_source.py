@@ -54,6 +54,8 @@ class LinkedInAlertEmailSource(BaseJobSource):
 
     def is_enabled(self, config: Optional[Any] = None) -> bool:
         if config is not None:
+            if hasattr(config, "source_linkedin_enabled") and not config.source_linkedin_enabled:
+                return False
             if hasattr(config, "source_gmail_enabled"):
                 return bool(config.source_gmail_enabled)
             if hasattr(config, "gmail_enabled"):
@@ -172,6 +174,8 @@ class IndeedAlertEmailSource(BaseJobSource):
 
     def is_enabled(self, config: Optional[Any] = None) -> bool:
         if config is not None:
+            if hasattr(config, "source_indeed_enabled") and not config.source_indeed_enabled:
+                return False
             if hasattr(config, "source_gmail_enabled"):
                 return bool(config.source_gmail_enabled)
             if hasattr(config, "gmail_enabled"):

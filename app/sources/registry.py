@@ -124,88 +124,88 @@ def create_default_source_registry(config: Optional[Config] = None) -> JobSource
     Factory creating a JobSourceRegistry populated with existing job sources.
     """
     registry = JobSourceRegistry()
+    config = config or Config()
 
-    if config:
-        adzuna = AdzunaJobSource(
-            app_id=config.adzuna_app_id,
-            app_key=config.adzuna_app_key,
-            country=config.adzuna_country,
-        )
-        registry.register(adzuna)
+    adzuna = AdzunaJobSource(
+        app_id=config.adzuna_app_id,
+        app_key=config.adzuna_app_key,
+        country=config.adzuna_country,
+    )
+    registry.register(adzuna)
 
-        internshala = InternshalaJobSource(
-            request_delay_min=config.internshala_request_delay_min,
-            request_delay_max=config.internshala_request_delay_max,
-        )
-        registry.register(internshala)
+    internshala = InternshalaJobSource(
+        request_delay_min=config.internshala_request_delay_min,
+        request_delay_max=config.internshala_request_delay_max,
+    )
+    registry.register(internshala)
 
-        linkedin_email = LinkedInAlertEmailSource(
-            query=config.gmail_linkedin_query,
-            query_limit=config.gmail_query_limit,
-        )
-        registry.register(linkedin_email)
+    linkedin_email = LinkedInAlertEmailSource(
+        query=config.gmail_linkedin_query,
+        query_limit=config.gmail_query_limit,
+    )
+    registry.register(linkedin_email)
 
-        indeed_email = IndeedAlertEmailSource(
-            query=config.gmail_indeed_query,
-            query_limit=config.gmail_query_limit,
-        )
-        registry.register(indeed_email)
+    indeed_email = IndeedAlertEmailSource(
+        query=config.gmail_indeed_query,
+        query_limit=config.gmail_query_limit,
+    )
+    registry.register(indeed_email)
 
-        naukri_email = NaukriAlertEmailSource(
-            query=config.gmail_naukri_query,
-            query_limit=config.gmail_query_limit,
-        )
-        registry.register(naukri_email)
+    naukri_email = NaukriAlertEmailSource(
+        query=config.gmail_naukri_query,
+        query_limit=config.gmail_query_limit,
+    )
+    registry.register(naukri_email)
 
-        glassdoor_email = GlassdoorAlertEmailSource(
-            query=config.gmail_glassdoor_query,
-            query_limit=config.gmail_query_limit,
-        )
-        registry.register(glassdoor_email)
+    glassdoor_email = GlassdoorAlertEmailSource(
+        query=config.gmail_glassdoor_query,
+        query_limit=config.gmail_query_limit,
+    )
+    registry.register(glassdoor_email)
 
-        unstop_email = UnstopAlertEmailSource(
-            query=config.gmail_unstop_query,
-            query_limit=config.gmail_query_limit,
-        )
-        registry.register(unstop_email)
+    unstop_email = UnstopAlertEmailSource(
+        query=config.gmail_unstop_query,
+        query_limit=config.gmail_query_limit,
+    )
+    registry.register(unstop_email)
 
-        foundit_email = founditAlertEmailSource(
-            query=config.gmail_foundit_query,
-            query_limit=config.gmail_query_limit,
-        )
-        registry.register(foundit_email)
+    foundit_email = founditAlertEmailSource(
+        query=config.gmail_foundit_query,
+        query_limit=config.gmail_query_limit,
+    )
+    registry.register(foundit_email)
 
-        cutshort_email = CutshortAlertEmailSource(
-            query=config.gmail_cutshort_query,
-            query_limit=config.gmail_query_limit,
-        )
-        registry.register(cutshort_email)
+    cutshort_email = CutshortAlertEmailSource(
+        query=config.gmail_cutshort_query,
+        query_limit=config.gmail_query_limit,
+    )
+    registry.register(cutshort_email)
 
-        hirist_email = HiristAlertEmailSource(
-            query=config.gmail_hirist_query,
-            query_limit=config.gmail_query_limit,
-        )
-        registry.register(hirist_email)
+    hirist_email = HiristAlertEmailSource(
+        query=config.gmail_hirist_query,
+        query_limit=config.gmail_query_limit,
+    )
+    registry.register(hirist_email)
 
-        wellfound_email = WellfoundAlertEmailSource(
-            query=config.gmail_wellfound_query,
-            query_limit=config.gmail_query_limit,
-        )
-        registry.register(wellfound_email)
+    wellfound_email = WellfoundAlertEmailSource(
+        query=config.gmail_wellfound_query,
+        query_limit=config.gmail_query_limit,
+    )
+    registry.register(wellfound_email)
 
-        arbeitnow = ArbeitnowJobSource()
-        registry.register(arbeitnow)
+    arbeitnow = ArbeitnowJobSource()
+    registry.register(arbeitnow)
 
-        remoteok = RemoteOKJobSource()
-        registry.register(remoteok)
+    remoteok = RemoteOKJobSource()
+    registry.register(remoteok)
 
-        jobicy = JobicyJobSource()
-        registry.register(jobicy)
+    jobicy = JobicyJobSource()
+    registry.register(jobicy)
 
-        himalayas = HimalayasJobSource()
-        registry.register(himalayas)
+    himalayas = HimalayasJobSource()
+    registry.register(himalayas)
 
-        jooble = JoobleJobSource(api_key=config.jooble_api_key)
-        registry.register(jooble)
+    jooble = JoobleJobSource(api_key=config.jooble_api_key)
+    registry.register(jooble)
 
     return registry
