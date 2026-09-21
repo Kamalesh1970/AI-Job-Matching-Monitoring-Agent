@@ -10,8 +10,10 @@ from app.sources.gmail.email_parser import (
     LinkedInEmailParser,
     NaukriEmailParser,
     UnstopEmailParser,
+    WellfoundEmailParser,
     classify_email,
     founditEmailParser,
+    normalize_wellfound_url,
 )
 from app.sources.gmail.gmail_client import GmailAPIClient
 from app.sources.gmail.gmail_source import (
@@ -22,6 +24,7 @@ from app.sources.gmail.gmail_source import (
     LinkedInAlertEmailSource,
     NaukriAlertEmailSource,
     UnstopAlertEmailSource,
+    WellfoundAlertEmailSource,
     founditAlertEmailSource,
 )
 from app.sources.gmail.models import ParsedEmailData
@@ -37,6 +40,8 @@ __all__ = [
     "founditEmailParser",
     "CutshortEmailParser",
     "HiristEmailParser",
+    "WellfoundEmailParser",
+    "normalize_wellfound_url",
     "classify_email",
     "LinkedInAlertEmailSource",
     "IndeedAlertEmailSource",
@@ -46,6 +51,7 @@ __all__ = [
     "founditAlertEmailSource",
     "CutshortAlertEmailSource",
     "HiristAlertEmailSource",
+    "WellfoundAlertEmailSource",
 ]
 
 

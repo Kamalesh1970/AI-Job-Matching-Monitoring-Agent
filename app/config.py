@@ -99,6 +99,7 @@ class Config:
     gmail_foundit_query: str = "from:(foundit.in OR monsterindia.com) newer_than:2d"
     gmail_cutshort_query: str = "from:(cutshort.io OR cutshort.com) newer_than:2d"
     gmail_hirist_query: str = "from:(hirist.com OR hirist.tech) newer_than:2d"
+    gmail_wellfound_query: str = "from:(wellfound.com OR angel.co) newer_than:2d"
     source_adzuna_enabled: bool = True
     source_internshala_enabled: bool = True
     source_gmail_enabled: bool = False
@@ -113,6 +114,7 @@ class Config:
     source_foundit_enabled: bool = True
     source_cutshort_enabled: bool = True
     source_hirist_enabled: bool = True
+    source_wellfound_enabled: bool = True
     jooble_api_key: str = ""
     llm_enabled: bool = False
     llm_provider: str = "gemini"
@@ -299,6 +301,7 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
     gmail_foundit_query = os.getenv("GMAIL_FOUNDIT_QUERY", "from:(foundit.in OR monsterindia.com) newer_than:2d").strip() or "from:(foundit.in OR monsterindia.com) newer_than:2d"
     gmail_cutshort_query = os.getenv("GMAIL_CUTSHORT_QUERY", "from:(cutshort.io OR cutshort.com) newer_than:2d").strip() or "from:(cutshort.io OR cutshort.com) newer_than:2d"
     gmail_hirist_query = os.getenv("GMAIL_HIRIST_QUERY", "from:(hirist.com OR hirist.tech) newer_than:2d").strip() or "from:(hirist.com OR hirist.tech) newer_than:2d"
+    gmail_wellfound_query = os.getenv("GMAIL_WELLFOUND_QUERY", "from:(wellfound.com OR angel.co) newer_than:2d").strip() or "from:(wellfound.com OR angel.co) newer_than:2d"
 
     source_adzuna_enabled_env = os.getenv("SOURCE_ADZUNA_ENABLED", "true").strip().lower()
     source_adzuna_enabled = source_adzuna_enabled_env in ("true", "1", "yes")
@@ -347,6 +350,9 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
 
     source_hirist_env = os.getenv("SOURCE_HIRIST_ENABLED", "true").strip().lower()
     source_hirist_enabled = source_hirist_env in ("true", "1", "yes")
+
+    source_wellfound_env = os.getenv("SOURCE_WELLFOUND_ENABLED", "true").strip().lower()
+    source_wellfound_enabled = source_wellfound_env in ("true", "1", "yes")
 
     jooble_api_key = os.getenv("JOOBLE_API_KEY", "").strip()
 
@@ -413,6 +419,7 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
         gmail_foundit_query=gmail_foundit_query,
         gmail_cutshort_query=gmail_cutshort_query,
         gmail_hirist_query=gmail_hirist_query,
+        gmail_wellfound_query=gmail_wellfound_query,
         source_adzuna_enabled=source_adzuna_enabled,
         source_internshala_enabled=source_internshala_enabled,
         source_gmail_enabled=source_gmail_enabled,
@@ -427,6 +434,7 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
         source_foundit_enabled=source_foundit_enabled,
         source_cutshort_enabled=source_cutshort_enabled,
         source_hirist_enabled=source_hirist_enabled,
+        source_wellfound_enabled=source_wellfound_enabled,
         jooble_api_key=jooble_api_key,
         llm_enabled=llm_enabled,
         llm_provider=llm_provider,

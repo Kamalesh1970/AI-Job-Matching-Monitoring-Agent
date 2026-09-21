@@ -18,6 +18,7 @@ from app.sources.gmail import (
     LinkedInAlertEmailSource,
     NaukriAlertEmailSource,
     UnstopAlertEmailSource,
+    WellfoundAlertEmailSource,
     founditAlertEmailSource,
 )
 from app.sources.himalayas import HimalayasJobSource
@@ -185,6 +186,12 @@ def create_default_source_registry(config: Optional[Config] = None) -> JobSource
             query_limit=config.gmail_query_limit,
         )
         registry.register(hirist_email)
+
+        wellfound_email = WellfoundAlertEmailSource(
+            query=config.gmail_wellfound_query,
+            query_limit=config.gmail_query_limit,
+        )
+        registry.register(wellfound_email)
 
         arbeitnow = ArbeitnowJobSource()
         registry.register(arbeitnow)

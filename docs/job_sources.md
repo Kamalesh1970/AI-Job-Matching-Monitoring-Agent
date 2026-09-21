@@ -23,6 +23,7 @@ This document provides official developer documentation for all job sources inte
 | **foundit Email** | `foundit_email` | Gmail API | Read-Only Gmail OAuth 2.0 (`gmail.readonly`) | `credentials.json` / `token.json` | Free | `IMPLEMENTED` |
 | **Cutshort Email** | `cutshort_email` | Gmail API | Read-Only Gmail OAuth 2.0 (`gmail.readonly`) | `credentials.json` / `token.json` | Free | `IMPLEMENTED` |
 | **Hirist Email** | `hirist_email` | Gmail API | Read-Only Gmail OAuth 2.0 (`gmail.readonly`) | `credentials.json` / `token.json` | Free | `IMPLEMENTED` |
+| **Wellfound Email** | `wellfound_email` | Gmail API | Read-Only Gmail OAuth 2.0 (`gmail.readonly`) | `credentials.json` / `token.json` | Free | `IMPLEMENTED` |
 
 ---
 
@@ -160,6 +161,20 @@ This document provides official developer documentation for all job sources inte
   - `SOURCE_HIRIST_ENABLED=true` (Default: `true`)
   - `GMAIL_HIRIST_QUERY="from:(hirist.com OR hirist.tech) subject:job"`
 - **ID Extraction**: `hi_<job_id>` from `hirist.tech/j/<id>` or `jobId=<id>`.
+- **Status**: `IMPLEMENTED`
+
+### 2.12 Wellfound Email Alert Source
+- **Source Identifier**: `wellfound_email`
+- **Class**: `WellfoundAlertEmailSource` ([`app/sources/gmail/gmail_source.py`](file:///home/kamalesh/AI%20Job-Matching%20%26%20Monitoring%20Agent/app/sources/gmail/gmail_source.py))
+- **Parser**: `WellfoundEmailParser` ([`app/sources/gmail/email_parser.py`](file:///home/kamalesh/AI%20Job-Matching%20%26%20Monitoring%20Agent/app/sources/gmail/email_parser.py))
+- **Access Endpoint**: Gmail API `users.messages.list` & `users.messages.get` (Read-only OAuth 2.0)
+- **Authentication**: `credentials.json` / `token.json` (`https://www.googleapis.com/auth/gmail.readonly`)
+- **Environment Variables**:
+  - `SOURCE_WELLFOUND_ENABLED=true` (Default: `true`)
+  - `GMAIL_WELLFOUND_QUERY="from:(wellfound.com OR angel.co) newer_than:2d"`
+- **ID Extraction**: `wf_<job_id>` from `wellfound.com/jobs/<id>`, `wellfound.com/l/<slug>`, or `jobId=<id>`.
+- **Parser Behavior**: Decodes MIME structure (`text/plain`, `text/html`), normalizes whitespace, strips tracking parameters, extracts title, company, location, salary/equity info, and description. Does not execute JavaScript or fetch external resources.
+- **Security & Scope**: No direct web scraping of Wellfound. No browser automation or CAPTCHA bypass. Operates strictly via read-only Gmail API (`gmail.readonly`).
 - **Status**: `IMPLEMENTED`
 
 ---

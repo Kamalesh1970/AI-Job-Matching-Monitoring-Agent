@@ -16,6 +16,7 @@ from app.sources.gmail.email_parser import (
     LinkedInEmailParser,
     NaukriEmailParser,
     UnstopEmailParser,
+    WellfoundEmailParser,
     founditEmailParser,
 )
 from app.sources.gmail.gmail_client import GmailAPIClient
@@ -948,6 +949,123 @@ class HiristAlertEmailSource(BaseJobSource):
 
         logger.info(
             "Hirist email ingestion completed: status=%s, %d jobs parsed from %d email(s).",
+            status,
+            len(all_jobs),
+            successful_emails,
+        )
+
+        return SourceResult(
+            source_name=self.name,
+            status=status,
+            jobs=all_jobs,
+            total_fetched=len(all_jobs),
+        )
+
+
+class WellfoundAlertEmailSource(BaseJobSource):
+    """
+    Job source fetcher that ingests Wellfound job alert emails via Gmail API read-only access.
+    Does NOT scrape Wellfound directly.
+    """
+
+    def __init__(
+        self,
+        gmail_client: Optional[GmailAPIClient] = None,
+        query: str = "from:(wellfound.com OR angel.co) newer_than:2d",
+        query_limit: int = 50,
+    ):
+        self.gmail_client = gmail_client or GmailAPIClient()
+        self.query = query
+        self.query_limit = query_limit
+
+    @property
+    def name(self) -> str:
+        return "Wellfound Email Alert"
+
+    @property
+    def source_identifier(self) -> str:
+        return "wellfound_email"
+
+    @property
+    def source_type(self) -> str:
+        return "email_alert"
+
+    def is_enabled(self, config: Optional[Any] = None) -> bool:
+        if config is not None:
+            if hasattr(config, "source_wellfound_enabled") and not config.source_wellfound_enabled:
+                return False
+            if hasattr(config, "source_gmail_enabled"):
+                return bool(config.source_gmail_enabled)
+            if hasattr(config, "gmail_enabled"):
+                return bool(config.gmail_enabled)
+        return True
+
+    def fetch_jobs_raw(
+        self, keyword: str = "", page: int = 1, results_per_page: int = 20
+    ) -> List[Dict[str, Any]]:
+        """
+        Required by BaseJobSource interface. Returns raw Gmail message summaries.
+        """
+        try:
+            messages = self.gmail_client.search_messages(query=self.query, max_results=self.query_limit)
+            return messages
+        except Exception as e:
+            logger.error("Failed to fetch raw Wellfound alert emails: %s", str(e))
+            return []
+
+    def fetch_source_jobs(self) -> SourceResult:
+        """
+        Fetches, decodes, and parses Wellfound job alert emails from Gmail.
+        """
+        logger.info("Starting Wellfound email alert ingestion (query='%s')...", self.query)
+        all_jobs: List[Job] = []
+        failed_emails = 0
+        successful_emails = 0
+
+        try:
+            message_refs = self.gmail_client.search_messages(query=self.query, max_results=self.query_limit)
+        except Exception as e:
+            logger.error("Failed to execute Gmail API query for Wellfound: %s", str(e))
+            return SourceResult(
+                source_name=self.name,
+                status=SourceStatus.FAILED,
+                jobs=[],
+                total_fetched=0,
+                error_message=f"Gmail API error: {str(e)}",
+            )
+
+        if not message_refs:
+            logger.info("No matching Wellfound alert emails found in Gmail.")
+            return SourceResult(
+                source_name=self.name,
+                status=SourceStatus.SUCCESS,
+                jobs=[],
+                total_fetched=0,
+            )
+
+        for msg_ref in message_refs:
+            msg_id = msg_ref.get("id")
+            if not msg_id:
+                continue
+
+            try:
+                msg_detail = self.gmail_client.get_message_detail(msg_id)
+                parsed_email = self.gmail_client.decode_message_payload(msg_detail)
+                email_jobs = WellfoundEmailParser.parse(parsed_email)
+                all_jobs.extend(email_jobs)
+                successful_emails += 1
+            except Exception as e:
+                logger.warning("Error processing Wellfound email message ID '%s': %s", msg_id, str(e))
+                failed_emails += 1
+
+        status = SourceStatus.SUCCESS
+        if failed_emails > 0 and successful_emails > 0:
+            status = SourceStatus.PARTIAL_FAILURE
+        elif failed_emails > 0 and successful_emails == 0:
+            status = SourceStatus.FAILED
+
+        logger.info(
+            "Wellfound email ingestion completed: status=%s, %d jobs parsed from %d email(s).",
             status,
             len(all_jobs),
             successful_emails,

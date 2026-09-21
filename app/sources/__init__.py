@@ -13,6 +13,7 @@ from app.sources.gmail import (
     LinkedInAlertEmailSource,
     NaukriAlertEmailSource,
     UnstopAlertEmailSource,
+    WellfoundAlertEmailSource,
     founditAlertEmailSource,
 )
 from app.sources.himalayas import HimalayasJobSource
@@ -34,6 +35,7 @@ __all__ = [
     "founditAlertEmailSource",
     "CutshortAlertEmailSource",
     "HiristAlertEmailSource",
+    "WellfoundAlertEmailSource",
     "ArbeitnowJobSource",
     "RemoteOKJobSource",
     "JobicyJobSource",

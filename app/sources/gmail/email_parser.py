@@ -991,6 +991,51 @@ def normalize_hirist_url(raw_url: str) -> Tuple[str, str]:
     return clean_url, f"hi_{digest}"
 
 
+def normalize_wellfound_url(raw_url: str) -> Tuple[str, str]:
+    """
+    Normalizes Wellfound (AngelList) job link and extracts source job ID.
+    Example: 'https://wellfound.com/jobs/1234567-lead-ai-engineer?utm_source=email'
+    -> ('https://wellfound.com/jobs/1234567', 'wf_1234567')
+    """
+    if not raw_url:
+        return "", ""
+
+    url_clean = raw_url.strip()
+    parsed = urlparse(url_clean)
+
+    query_params = parse_qs(parsed.query)
+    job_id_param = query_params.get("jobId") or query_params.get("job_id") or query_params.get("id")
+    if job_id_param and job_id_param[0]:
+        job_id_num = job_id_param[0].strip()
+        canonical_url = f"https://wellfound.com/jobs/{job_id_num}"
+        return canonical_url, f"wf_{job_id_num}"
+
+    match = re.search(r"/jobs?/(\d+)", parsed.path)
+    if match:
+        job_id_num = match.group(1)
+        canonical_url = f"https://wellfound.com/jobs/{job_id_num}"
+        return canonical_url, f"wf_{job_id_num}"
+
+    l_match = re.search(r"/l/([a-zA-Z0-9_-]+)", parsed.path)
+    if l_match:
+        slug = l_match.group(1)
+        canonical_url = f"https://wellfound.com/l/{slug}"
+        return canonical_url, f"wf_{slug}"
+
+    match_hyphen = re.search(r"-(\d{4,})", parsed.path)
+    if match_hyphen:
+        job_id_num = match_hyphen.group(1)
+        canonical_url = f"https://wellfound.com/jobs/{job_id_num}"
+        return canonical_url, f"wf_{job_id_num}"
+
+    netloc = parsed.netloc or "wellfound.com"
+    if "angel.co" in netloc:
+        netloc = "wellfound.com"
+    clean_url = urlunparse((parsed.scheme or "https", netloc, parsed.path, "", "", ""))
+    digest = hashlib.sha256(clean_url.encode("utf-8")).hexdigest()[:16]
+    return clean_url, f"wf_{digest}"
+
+
 class CutshortEmailParser:
     """
     Parser for Cutshort job alert emails (HTML and plain-text).
@@ -1289,13 +1334,167 @@ class HiristEmailParser:
         return jobs
 
 
+class WellfoundEmailParser:
+    """
+    Parser for Wellfound (AngelList Talent) job alert emails (HTML and plain-text).
+    """
+
+    @staticmethod
+    def is_wellfound_email(email_data: ParsedEmailData) -> bool:
+        """
+        Classifies whether an email is a Wellfound job alert using multiple signals:
+        - Sender domain/address (wellfound.com, angel.co)
+        - Subject patterns ('wellfound', 'angellist', 'job alert', 'matches', 'recommendation')
+        - Platform branding / body structure ('wellfound.com', 'angel.co')
+        """
+        sender = (email_data.sender or "").lower()
+        subject = (email_data.subject or "").lower()
+        body = (email_data.plain_text or email_data.html_content or "").lower()
+
+        if any(d in sender for d in ("wellfound.com", "angel.co", "wellfound", "angellist")):
+            return True
+        if any(w in subject for w in ("wellfound", "angellist")):
+            return True
+        if any(w in body for w in ("wellfound.com", "angel.co", "wellfound")):
+            return True
+        return False
+
+    @staticmethod
+    def parse(email_data: ParsedEmailData) -> List[Job]:
+        """
+        Parses a Wellfound job alert email and returns a list of normalized Job models.
+        """
+        html = email_data.html_content or email_data.plain_text
+        if not html:
+            logger.debug("Wellfound email message ID '%s' has empty body.", email_data.message_id)
+            return []
+
+        soup = BeautifulSoup(html, "html.parser")
+        jobs: List[Job] = []
+
+        job_links = soup.find_all("a", href=re.compile(r"wellfound\.com/(?:jobs?|l/)|angel\.co/(?:jobs?|l/)|jobId="))
+
+        raw_urls: List[Tuple[str, str]] = []
+        if job_links:
+            for link in job_links:
+                raw_href = link.get("href", "").strip()
+                t_text = re.sub(r"\s+", " ", link.get_text(strip=True))
+                if raw_href:
+                    raw_urls.append((raw_href, t_text))
+        else:
+            text_links = re.findall(r"https?://[^\s\"'>]*(?:wellfound\.com|angel\.co)[^\s\"'>]*", html)
+            for url_match in text_links:
+                raw_urls.append((url_match, ""))
+
+        seen_urls = set()
+
+        for raw_url, link_text in raw_urls:
+            try:
+                if not re.search(r"(?:wellfound\.com|angel\.co)/(?:jobs?|l/)|jobId=|-(\d{4,})", raw_url, re.I):
+                    continue
+                if re.search(r"/login|/privacy|/settings|/messages|/auth|/company|/recruit", raw_url, re.I):
+                    continue
+
+                title = link_text
+                if not title or len(title) < 2 or "view job" in title.lower() or "apply" in title.lower():
+                    if ":" in email_data.subject:
+                        title = email_data.subject.split(":")[-1].strip()
+                    elif "-" in raw_url:
+                        slug_parts = urlparse(raw_url).path.split("/")[-1].split("-")
+                        title_words = [p.capitalize() for p in slug_parts if p and not p.isdigit() and p not in ("jobs", "job", "l")]
+                        title = " ".join(title_words[:4]) if title_words else "Wellfound Position"
+                    else:
+                        title = "Wellfound Position"
+
+                title = re.sub(r"\s+", " ", title).strip()
+                if not title or not raw_url:
+                    continue
+
+                canonical_url, source_job_id = normalize_wellfound_url(raw_url)
+                if not canonical_url or canonical_url in seen_urls:
+                    continue
+                seen_urls.add(canonical_url)
+
+                company = ""
+                location = ""
+                description = title
+
+                link = soup.find("a", href=raw_url)
+                if link:
+                    container = link.find_parent(["td", "tr", "div", "table", "li", "body", "html"]) or link.parent
+                    if container:
+                        container_text = re.sub(r"\s+", " ", container.get_text(" ", strip=True))
+
+                        comp_elem = (
+                            container.select_one(".company")
+                            or container.select_one(".company-name")
+                            or container.select_one(".employer")
+                            or container.select_one(".startup-name")
+                        )
+                        if comp_elem:
+                            company = re.sub(r"\s+", " ", strip_html(comp_elem.get_text(strip=True)))
+
+                        loc_elem = (
+                            container.select_one(".location")
+                            or container.select_one(".loc")
+                            or container.select_one(".city")
+                        )
+                        if loc_elem:
+                            location = re.sub(r"\s+", " ", strip_html(loc_elem.get_text(strip=True)))
+
+                        snippet_elem = (
+                            container.select_one(".snippet")
+                            or container.select_one(".description")
+                            or container.select_one(".summary")
+                            or container.select_one(".compensation")
+                            or container.select_one(".salary")
+                        )
+                        if snippet_elem:
+                            description = re.sub(r"\s+", " ", strip_html(snippet_elem.get_text(strip=True)))
+                        elif container_text:
+                            description = container_text[:300]
+
+                        if (not company or not location):
+                            lines = [l.strip() for l in container.get_text("\n", strip=True).split("\n") if l.strip()]
+                            for l in lines:
+                                if l != title and len(l) < 60:
+                                    if not company:
+                                        company = re.sub(r"\s+", " ", l)
+                                    elif not location and l != company:
+                                        location = re.sub(r"\s+", " ", l)
+                                        break
+
+                fingerprint = generate_fingerprint(company=company, title=title, location=location)
+
+                job = Job(
+                    source="Wellfound Email Alert",
+                    source_job_id=source_job_id,
+                    title=title,
+                    company=company,
+                    location=location,
+                    description=description,
+                    url=canonical_url,
+                    created_at=email_data.received_at or None,
+                    fingerprint=fingerprint,
+                )
+                jobs.append(job)
+
+            except Exception as e:
+                logger.warning("Error parsing individual Wellfound job link in email ID '%s': %s", email_data.message_id, str(e))
+                continue
+
+        return jobs
+
+
 def classify_email(email_data: ParsedEmailData) -> Optional[str]:
     """
     Classifies a Gmail message into one of the supported email alert source types:
-    'cutshort_email', 'hirist_email', 'naukri_email', 'glassdoor_email',
+    'wellfound_email', 'cutshort_email', 'hirist_email', 'naukri_email', 'glassdoor_email',
     'unstop_email', 'foundit_email', 'linkedin_email', 'indeed_email'.
     Returns None if unclassified.
     """
+    if WellfoundEmailParser.is_wellfound_email(email_data):
+        return "wellfound_email"
     if CutshortEmailParser.is_cutshort_email(email_data):
         return "cutshort_email"
     if HiristEmailParser.is_hirist_email(email_data):
@@ -1305,6 +1504,8 @@ def classify_email(email_data: ParsedEmailData) -> Optional[str]:
     subject = (email_data.subject or "").lower()
     body = (email_data.plain_text or email_data.html_content or "").lower()
 
+    if any(d in sender for d in ("wellfound.com", "angel.co")) or "wellfound" in subject or "wellfound.com" in body or "angel.co" in body:
+        return "wellfound_email"
     if "naukri.com" in sender or "naukri" in subject or "naukri.com" in body:
         return "naukri_email"
     if "glassdoor.com" in sender or "glassdoor" in subject or "glassdoor.com" in body:
