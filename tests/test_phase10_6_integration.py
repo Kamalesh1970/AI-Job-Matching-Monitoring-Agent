@@ -66,8 +66,10 @@ from app.sources.himalayas import HimalayasJobSource
 from app.sources.internshala import InternshalaJobSource
 from app.sources.jobicy import JobicyJobSource
 from app.sources.jooble import JoobleJobSource
+from app.sources.jsearch import JSearchJobSource
 from app.sources.registry import JobSourceRegistry, create_default_source_registry
 from app.sources.remoteok import RemoteOKJobSource
+from app.sources.serpapi import SerpApiJobSource
 
 
 @pytest.fixture
@@ -96,6 +98,8 @@ def mock_config():
         source_jobicy_enabled=True,
         source_himalayas_enabled=True,
         source_jooble_enabled=True,
+        source_jsearch_enabled=True,
+        source_serpapi_enabled=True,
         source_naukri_enabled=True,
         source_glassdoor_enabled=True,
         source_unstop_enabled=True,
@@ -104,6 +108,9 @@ def mock_config():
         source_hirist_enabled=True,
         source_wellfound_enabled=True,
         jooble_api_key="test_jooble_key",
+        jsearch_api_key="test_jsearch_key",
+        jsearch_rapidapi_host="jsearch.p.rapidapi.com",
+        serpapi_key="test_serpapi_key",
         telegram_bot_token="test_bot_token",
         telegram_chat_id="test_chat_id",
         telegram_enabled=True,
@@ -115,11 +122,11 @@ def mock_config():
 # ============================================================================
 
 def test_complete_source_registry(mock_config):
-    """Verify create_default_source_registry registers all 16 job sources."""
+    """Verify create_default_source_registry registers all 18 job sources."""
     registry = create_default_source_registry(mock_config)
     sources = registry.list_sources()
 
-    assert len(sources) == 16, f"Expected 16 registered sources, got {len(sources)}"
+    assert len(sources) == 18, f"Expected 18 registered sources, got {len(sources)}"
 
     expected_identifiers = {
         "adzuna": "api",
@@ -138,6 +145,8 @@ def test_complete_source_registry(mock_config):
         "jobicy": "api",
         "himalayas": "api",
         "jooble": "api",
+        "jsearch": "api",
+        "serpapi": "api",
     }
 
     registered_map = {s.source_identifier: s.source_type for s in sources}
@@ -159,7 +168,7 @@ def test_registry_dynamic_enable_disable(mock_config):
     enabled_sources = registry.list_enabled_sources(mock_config)
     enabled_ids = {s.source_identifier for s in enabled_sources}
     assert "adzuna" not in enabled_ids
-    assert len(enabled_sources) == 15
+    assert len(enabled_sources) == 17
 
     registry.enable_source("adzuna")
     assert registry.is_source_enabled("adzuna", mock_config) is True
@@ -583,7 +592,7 @@ def test_end_to_end_multi_source_pipeline(memory_db, mock_config):
 
 
 # ============================================================================
-# M. 16-SOURCE INTEGRATION MATRIX TEST
+# M. 18-SOURCE INTEGRATION MATRIX TEST
 # ============================================================================
 
 @pytest.mark.parametrize(
@@ -605,9 +614,11 @@ def test_end_to_end_multi_source_pipeline(memory_db, mock_config):
         ("jobicy", JobicyJobSource, "api", {"id": "matrix_jby", "jobTitle": "Data Scientist", "url": "https://jobicy.com/1"}),
         ("himalayas", HimalayasJobSource, "api", {"id": "matrix_him", "title": "CV Dev", "url": "https://himalayas.app/1"}),
         ("jooble", JoobleJobSource, "api", {"id": "matrix_jbl", "title": "NLP Eng", "link": "https://jooble.org/1"}),
+        ("jsearch", JSearchJobSource, "api", {"job_id": "matrix_js", "job_title": "ML Eng"}),
+        ("serpapi", SerpApiJobSource, "api", {"job_id": "matrix_serp", "title": "AI Specialist"}),
     ],
 )
-def test_16_source_integration_matrix(identifier, source_class, expected_type, test_raw_payload, mock_config):
+def test_18_source_integration_matrix(identifier, source_class, expected_type, test_raw_payload, mock_config):
     """
     Matrix test validating every source for:
     (Identifier, Class, Type, Enabled Status, Registry Lookup).

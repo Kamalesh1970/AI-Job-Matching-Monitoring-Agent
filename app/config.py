@@ -116,6 +116,8 @@ class Config:
     source_jobicy_enabled: bool = True
     source_himalayas_enabled: bool = True
     source_jooble_enabled: bool = True
+    source_jsearch_enabled: bool = True
+    source_serpapi_enabled: bool = True
     source_naukri_enabled: bool = True
     source_glassdoor_enabled: bool = True
     source_unstop_enabled: bool = True
@@ -124,6 +126,9 @@ class Config:
     source_hirist_enabled: bool = True
     source_wellfound_enabled: bool = True
     jooble_api_key: str = ""
+    jsearch_api_key: str = ""
+    jsearch_rapidapi_host: str = "jsearch.p.rapidapi.com"
+    serpapi_key: str = ""
     llm_enabled: bool = False
     llm_provider: str = "gemini"
     gemini_api_key: str = ""
@@ -347,6 +352,12 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
     source_jooble_env = os.getenv("SOURCE_JOOBLE_ENABLED", "true").strip().lower()
     source_jooble_enabled = source_jooble_env in ("true", "1", "yes")
 
+    source_jsearch_env = os.getenv("SOURCE_JSEARCH_ENABLED", "true").strip().lower()
+    source_jsearch_enabled = source_jsearch_env in ("true", "1", "yes")
+
+    source_serpapi_env = os.getenv("SOURCE_SERPAPI_ENABLED", "true").strip().lower()
+    source_serpapi_enabled = source_serpapi_env in ("true", "1", "yes")
+
     source_naukri_env = os.getenv("SOURCE_NAUKRI_ENABLED", "true").strip().lower()
     source_naukri_enabled = source_naukri_env in ("true", "1", "yes")
 
@@ -369,6 +380,9 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
     source_wellfound_enabled = source_wellfound_env in ("true", "1", "yes")
 
     jooble_api_key = os.getenv("JOOBLE_API_KEY", "").strip()
+    jsearch_api_key = os.getenv("JSEARCH_API_KEY", "").strip()
+    jsearch_rapidapi_host = os.getenv("JSEARCH_RAPIDAPI_HOST", "jsearch.p.rapidapi.com").strip() or "jsearch.p.rapidapi.com"
+    serpapi_key = os.getenv("SERPAPI_KEY", "").strip()
 
     llm_enabled_env = os.getenv("LLM_ENABLED", "false").strip().lower()
     llm_enabled = llm_enabled_env in ("true", "1", "yes")
@@ -449,6 +463,8 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
         source_jobicy_enabled=source_jobicy_enabled,
         source_himalayas_enabled=source_himalayas_enabled,
         source_jooble_enabled=source_jooble_enabled,
+        source_jsearch_enabled=source_jsearch_enabled,
+        source_serpapi_enabled=source_serpapi_enabled,
         source_naukri_enabled=source_naukri_enabled,
         source_glassdoor_enabled=source_glassdoor_enabled,
         source_unstop_enabled=source_unstop_enabled,
@@ -457,6 +473,9 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
         source_hirist_enabled=source_hirist_enabled,
         source_wellfound_enabled=source_wellfound_enabled,
         jooble_api_key=jooble_api_key,
+        jsearch_api_key=jsearch_api_key,
+        jsearch_rapidapi_host=jsearch_rapidapi_host,
+        serpapi_key=serpapi_key,
         llm_enabled=llm_enabled,
         llm_provider=llm_provider,
         gemini_api_key=gemini_api_key,

@@ -1,6 +1,6 @@
 """
-Jooble API job source fetcher client.
-Endpoint: POST https://jooble.org/api/{api_key}
+JSearch API job source fetcher client (RapidAPI).
+Endpoint: GET https://jsearch.p.rapidapi.com/search
 """
 
 import logging
@@ -14,25 +14,32 @@ from app.sources.base import BaseJobSource
 logger = logging.getLogger(__name__)
 
 
-class JoobleJobSource(BaseJobSource):
+class JSearchJobSource(BaseJobSource):
     """
-    Client for fetching job postings via Jooble REST API.
-    Uses POST request with keywords, location, and page payload.
+    Client for fetching job postings via JSearch API on RapidAPI.
+    Requires X-RapidAPI-Key and X-RapidAPI-Host headers.
     """
 
-    BASE_URL_TEMPLATE = "https://jooble.org/api/{api_key}"
+    DEFAULT_HOST = "jsearch.p.rapidapi.com"
+    BASE_URL = "https://jsearch.p.rapidapi.com/search"
 
-    def __init__(self, api_key: str = "", timeout: int = 15):
+    def __init__(
+        self,
+        api_key: str = "",
+        rapidapi_host: str = DEFAULT_HOST,
+        timeout: int = 15,
+    ):
         self.api_key = api_key.strip()
+        self.rapidapi_host = rapidapi_host.strip() or self.DEFAULT_HOST
         self.timeout = timeout
 
     @property
     def name(self) -> str:
-        return "Jooble"
+        return "JSearch"
 
     @property
     def source_identifier(self) -> str:
-        return "jooble"
+        return "jsearch"
 
     @property
     def source_type(self) -> str:
@@ -40,74 +47,83 @@ class JoobleJobSource(BaseJobSource):
 
     def is_enabled(self, config: Optional[Any] = None) -> bool:
         if config is not None:
-            if hasattr(config, "source_jooble_enabled") and not config.source_jooble_enabled:
+            if hasattr(config, "source_jsearch_enabled") and not config.source_jsearch_enabled:
                 return False
-            key = getattr(config, "jooble_api_key", "") or self.api_key
+            key = getattr(config, "jsearch_api_key", "") or self.api_key
             return bool(key and str(key).strip())
         return bool(self.api_key)
 
     def _sanitize_error(self, err_msg: str) -> str:
-        """Redacts API key from error strings to prevent leaking credentials."""
+        """Redacts sensitive API keys from error messages."""
         if not self.api_key:
             return err_msg
         return err_msg.replace(self.api_key, "[REDACTED]")
 
     def fetch_jobs_raw(
-        self, keyword: str = "AI Engineer", location: str = "India", page: int = 1, results_per_page: int = 20
+        self,
+        keyword: str = "AI Engineer",
+        location: str = "India",
+        page: int = 1,
+        results_per_page: int = 20,
     ) -> List[Dict[str, Any]]:
         """
-        Fetches raw job postings from Jooble API using POST request.
+        Fetches raw job dictionaries from JSearch RapidAPI endpoint.
         """
         if not self.api_key:
-            logger.warning("Jooble API key missing; skipping request.")
+            logger.warning("JSearch API key missing; skipping request.")
             return []
 
-        url = self.BASE_URL_TEMPLATE.format(api_key=self.api_key)
-        payload = {
-            "keywords": keyword,
-            "location": location or "India",
-            "page": page,
+        search_query = f"{keyword} in {location}".strip() if location else keyword
+
+        headers = {
+            "X-RapidAPI-Key": self.api_key,
+            "X-RapidAPI-Host": self.rapidapi_host,
+        }
+        params = {
+            "query": search_query,
+            "page": str(page),
+            "num_pages": "1",
         }
 
         try:
-            logger.info("Requesting Jooble API (keyword='%s', location='%s', page=%d)", keyword, location, page)
-            response = requests.post(
-                url,
-                json=payload,
-                headers={"Content-Type": "application/json"},
+            logger.info("Requesting JSearch API (query='%s', page=%d)", search_query, page)
+            response = requests.get(
+                self.BASE_URL,
+                headers=headers,
+                params=params,
                 timeout=self.timeout,
             )
             response.raise_for_status()
             data = response.json()
 
             if not isinstance(data, dict):
-                logger.error("Unexpected response format from Jooble API: expected dict")
+                logger.error("Unexpected response format from JSearch API: expected dict")
                 return []
 
-            results = data.get("jobs")
+            results = data.get("data")
             if not isinstance(results, list):
-                logger.error("Malformed 'jobs' field from Jooble API")
+                logger.error("Malformed 'data' field from JSearch API")
                 return []
 
             return results
 
         except requests.exceptions.Timeout:
-            logger.error("Timeout fetching from Jooble API")
+            logger.error("Timeout fetching from JSearch API")
             return []
         except requests.exceptions.HTTPError as e:
             sanitized = self._sanitize_error(str(e))
-            logger.error("HTTP error fetching from Jooble API: %s", sanitized)
+            logger.error("HTTP error fetching from JSearch API: %s", sanitized)
             return []
         except requests.exceptions.RequestException as e:
             sanitized = self._sanitize_error(str(e))
-            logger.error("Network error fetching from Jooble API: %s", sanitized)
+            logger.error("Network error fetching from JSearch API: %s", sanitized)
             return []
         except ValueError as e:
-            logger.error("Invalid JSON response from Jooble API: %s", str(e))
+            logger.error("Invalid JSON response from JSearch API: %s", str(e))
             return []
         except Exception as e:
             sanitized = self._sanitize_error(str(e))
-            logger.error("Unexpected error fetching from Jooble API: %s", sanitized)
+            logger.error("Unexpected error fetching from JSearch API: %s", sanitized)
             return []
 
     def fetch_source_jobs(
@@ -118,14 +134,18 @@ class JoobleJobSource(BaseJobSource):
         **kwargs: Any,
     ) -> SourceResult:
         """
-        Executes fetch across keywords and returns structured SourceResult with status & timing metrics.
+        Executes fetch across keywords and returns structured SourceResult.
         """
-        from app.services.normalization import normalize_jooble_job
+        from app.services.normalization import normalize_jsearch_job
 
         start_time = time.time()
+
         effective_key = self.api_key
+        effective_host = self.rapidapi_host
+
         if config is not None:
-            effective_key = getattr(config, "jooble_api_key", "") or self.api_key
+            effective_key = getattr(config, "jsearch_api_key", "") or self.api_key
+            effective_host = getattr(config, "jsearch_rapidapi_host", "") or self.rapidapi_host
 
         if not effective_key:
             return SourceResult(
@@ -133,12 +153,12 @@ class JoobleJobSource(BaseJobSource):
                 status=SourceStatus.DISABLED,
                 jobs=[],
                 total_fetched=0,
-                error_message="Jooble API key not configured.",
+                error_message="JSearch API key not configured.",
                 duration_seconds=time.time() - start_time,
             )
 
-        if not self.api_key and effective_key:
-            self.api_key = effective_key
+        self.api_key = effective_key
+        self.rapidapi_host = effective_host or self.DEFAULT_HOST
 
         search_keywords = keywords or ["AI Engineer"]
         target_location = location or "India"
@@ -149,7 +169,7 @@ class JoobleJobSource(BaseJobSource):
             try:
                 raw_jobs = self.fetch_jobs_raw(keyword=kw, location=target_location, page=1)
                 for rj in raw_jobs:
-                    all_jobs.append(normalize_jooble_job(rj))
+                    all_jobs.append(normalize_jsearch_job(rj))
             except Exception as e:
                 sanitized = self._sanitize_error(str(e))
                 errors.append(f"Keyword '{kw}': {sanitized}")

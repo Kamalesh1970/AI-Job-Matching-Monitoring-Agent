@@ -25,7 +25,9 @@ from app.sources.himalayas import HimalayasJobSource
 from app.sources.internshala import InternshalaJobSource
 from app.sources.jobicy import JobicyJobSource
 from app.sources.jooble import JoobleJobSource
+from app.sources.jsearch import JSearchJobSource
 from app.sources.remoteok import RemoteOKJobSource
+from app.sources.serpapi import SerpApiJobSource
 
 logger = logging.getLogger(__name__)
 
@@ -207,5 +209,14 @@ def create_default_source_registry(config: Optional[Config] = None) -> JobSource
 
     jooble = JoobleJobSource(api_key=config.jooble_api_key)
     registry.register(jooble)
+
+    jsearch = JSearchJobSource(
+        api_key=config.jsearch_api_key,
+        rapidapi_host=config.jsearch_rapidapi_host,
+    )
+    registry.register(jsearch)
+
+    serpapi = SerpApiJobSource(api_key=config.serpapi_key)
+    registry.register(serpapi)
 
     return registry

@@ -1,6 +1,6 @@
 """
-Jooble API job source fetcher client.
-Endpoint: POST https://jooble.org/api/{api_key}
+SerpApi Google Jobs source fetcher client.
+Endpoint: GET https://serpapi.com/search?engine=google_jobs
 """
 
 import logging
@@ -14,13 +14,13 @@ from app.sources.base import BaseJobSource
 logger = logging.getLogger(__name__)
 
 
-class JoobleJobSource(BaseJobSource):
+class SerpApiJobSource(BaseJobSource):
     """
-    Client for fetching job postings via Jooble REST API.
-    Uses POST request with keywords, location, and page payload.
+    Client for fetching Google Jobs postings via SerpApi REST endpoint.
+    Uses engine=google_jobs parameter with JSON response format.
     """
 
-    BASE_URL_TEMPLATE = "https://jooble.org/api/{api_key}"
+    BASE_URL = "https://serpapi.com/search"
 
     def __init__(self, api_key: str = "", timeout: int = 15):
         self.api_key = api_key.strip()
@@ -28,11 +28,11 @@ class JoobleJobSource(BaseJobSource):
 
     @property
     def name(self) -> str:
-        return "Jooble"
+        return "SerpApi"
 
     @property
     def source_identifier(self) -> str:
-        return "jooble"
+        return "serpapi"
 
     @property
     def source_type(self) -> str:
@@ -40,74 +40,83 @@ class JoobleJobSource(BaseJobSource):
 
     def is_enabled(self, config: Optional[Any] = None) -> bool:
         if config is not None:
-            if hasattr(config, "source_jooble_enabled") and not config.source_jooble_enabled:
+            if hasattr(config, "source_serpapi_enabled") and not config.source_serpapi_enabled:
                 return False
-            key = getattr(config, "jooble_api_key", "") or self.api_key
+            key = getattr(config, "serpapi_key", "") or self.api_key
             return bool(key and str(key).strip())
         return bool(self.api_key)
 
     def _sanitize_error(self, err_msg: str) -> str:
-        """Redacts API key from error strings to prevent leaking credentials."""
+        """Redacts sensitive API key from error messages."""
         if not self.api_key:
             return err_msg
         return err_msg.replace(self.api_key, "[REDACTED]")
 
     def fetch_jobs_raw(
-        self, keyword: str = "AI Engineer", location: str = "India", page: int = 1, results_per_page: int = 20
+        self,
+        keyword: str = "AI Engineer",
+        location: str = "India",
+        page: int = 1,
+        results_per_page: int = 20,
     ) -> List[Dict[str, Any]]:
         """
-        Fetches raw job postings from Jooble API using POST request.
+        Fetches raw job results from SerpApi Google Jobs engine.
         """
         if not self.api_key:
-            logger.warning("Jooble API key missing; skipping request.")
+            logger.warning("SerpApi API key missing; skipping request.")
             return []
 
-        url = self.BASE_URL_TEMPLATE.format(api_key=self.api_key)
-        payload = {
-            "keywords": keyword,
+        params = {
+            "engine": "google_jobs",
+            "q": keyword,
             "location": location or "India",
-            "page": page,
+            "api_key": self.api_key,
+            "output": "json",
         }
 
         try:
-            logger.info("Requesting Jooble API (keyword='%s', location='%s', page=%d)", keyword, location, page)
-            response = requests.post(
-                url,
-                json=payload,
-                headers={"Content-Type": "application/json"},
+            logger.info("Requesting SerpApi Google Jobs (q='%s', location='%s')", keyword, location)
+            response = requests.get(
+                self.BASE_URL,
+                params=params,
                 timeout=self.timeout,
             )
             response.raise_for_status()
             data = response.json()
 
             if not isinstance(data, dict):
-                logger.error("Unexpected response format from Jooble API: expected dict")
+                logger.error("Unexpected response format from SerpApi: expected dict")
                 return []
 
-            results = data.get("jobs")
+            if "error" in data:
+                sanitized = self._sanitize_error(str(data["error"]))
+                logger.error("SerpApi response error: %s", sanitized)
+                return []
+
+            results = data.get("jobs_results")
             if not isinstance(results, list):
-                logger.error("Malformed 'jobs' field from Jooble API")
+                logger.error("Malformed 'jobs_results' field from SerpApi")
                 return []
 
             return results
 
         except requests.exceptions.Timeout:
-            logger.error("Timeout fetching from Jooble API")
+            logger.error("Timeout fetching from SerpApi")
             return []
         except requests.exceptions.HTTPError as e:
             sanitized = self._sanitize_error(str(e))
-            logger.error("HTTP error fetching from Jooble API: %s", sanitized)
+            logger.error("HTTP error fetching from SerpApi: %s", sanitized)
             return []
         except requests.exceptions.RequestException as e:
             sanitized = self._sanitize_error(str(e))
-            logger.error("Network error fetching from Jooble API: %s", sanitized)
+            logger.error("Network error fetching from SerpApi: %s", sanitized)
             return []
         except ValueError as e:
-            logger.error("Invalid JSON response from Jooble API: %s", str(e))
+            logger.error("Invalid JSON response from SerpApi: %s", str(e))
             return []
         except Exception as e:
             sanitized = self._sanitize_error(str(e))
-            logger.error("Unexpected error fetching from Jooble API: %s", sanitized)
+            logger.error("Unexpected error fetching from SerpApi: %s", sanitized)
             return []
 
     def fetch_source_jobs(
@@ -118,14 +127,15 @@ class JoobleJobSource(BaseJobSource):
         **kwargs: Any,
     ) -> SourceResult:
         """
-        Executes fetch across keywords and returns structured SourceResult with status & timing metrics.
+        Executes fetch across keywords and returns structured SourceResult.
         """
-        from app.services.normalization import normalize_jooble_job
+        from app.services.normalization import normalize_serpapi_job
 
         start_time = time.time()
+
         effective_key = self.api_key
         if config is not None:
-            effective_key = getattr(config, "jooble_api_key", "") or self.api_key
+            effective_key = getattr(config, "serpapi_key", "") or self.api_key
 
         if not effective_key:
             return SourceResult(
@@ -133,12 +143,11 @@ class JoobleJobSource(BaseJobSource):
                 status=SourceStatus.DISABLED,
                 jobs=[],
                 total_fetched=0,
-                error_message="Jooble API key not configured.",
+                error_message="SerpApi API key not configured.",
                 duration_seconds=time.time() - start_time,
             )
 
-        if not self.api_key and effective_key:
-            self.api_key = effective_key
+        self.api_key = effective_key
 
         search_keywords = keywords or ["AI Engineer"]
         target_location = location or "India"
@@ -149,7 +158,7 @@ class JoobleJobSource(BaseJobSource):
             try:
                 raw_jobs = self.fetch_jobs_raw(keyword=kw, location=target_location, page=1)
                 for rj in raw_jobs:
-                    all_jobs.append(normalize_jooble_job(rj))
+                    all_jobs.append(normalize_serpapi_job(rj))
             except Exception as e:
                 sanitized = self._sanitize_error(str(e))
                 errors.append(f"Keyword '{kw}': {sanitized}")

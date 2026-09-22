@@ -34,6 +34,9 @@ from app.services.telegram_notifier import TelegramNotifier
 from app.sources.adzuna import AdzunaJobSource
 from app.sources.gmail import GmailAPIClient, IndeedAlertEmailSource, LinkedInAlertEmailSource
 from app.sources.internshala import InternshalaJobSource
+from app.sources.jooble import JoobleJobSource
+from app.sources.jsearch import JSearchJobSource
+from app.sources.serpapi import SerpApiJobSource
 from app.llm.tailoring_service import ResumeTailoringService
 
 
@@ -353,6 +356,126 @@ class PipelineService:
                 logger.error("Gmail API client initialization error: %s", str(e))
                 failed_sources += 1
 
+        # ----------------------------------------------------
+        # Phase 8: Ingestion - Jooble
+        # ----------------------------------------------------
+        if cfg.source_jooble_enabled and cfg.jooble_api_key:
+            jooble_run_id = record_source_run_start(conn, "Jooble", started_at=started_at)
+            try:
+                jooble_source = JoobleJobSource(api_key=cfg.jooble_api_key, timeout=15)
+                jooble_res = jooble_source.fetch_source_jobs(keywords=cfg.keywords, config=cfg)
+                jooble_new_count = 0
+                for job in jooble_res.jobs:
+                    jobs_fetched += 1
+                    if insert_job(conn, job):
+                        new_jobs += 1
+                        jooble_new_count += 1
+                    else:
+                        existing_jobs += 1
+
+                record_source_run_finish(
+                    conn,
+                    run_id=jooble_run_id,
+                    status=jooble_res.status,
+                    jobs_fetched=jooble_res.total_fetched,
+                    new_jobs=jooble_new_count,
+                    error_message=jooble_res.error_message,
+                )
+                if jooble_res.status in (SourceStatus.FAILED, SourceStatus.BLOCKED, SourceStatus.PARTIAL_FAILURE):
+                    failed_sources += 1
+            except Exception as e:
+                logger.error("Failure during Jooble job ingestion: %s", str(e))
+                failed_sources += 1
+                record_source_run_finish(
+                    conn,
+                    run_id=jooble_run_id,
+                    status=SourceStatus.FAILED,
+                    jobs_fetched=0,
+                    new_jobs=0,
+                    error_message=str(e),
+                )
+
+        # ----------------------------------------------------
+        # Phase 9: Ingestion - JSearch (RapidAPI)
+        # ----------------------------------------------------
+        if cfg.source_jsearch_enabled and cfg.jsearch_api_key:
+            jsearch_run_id = record_source_run_start(conn, "JSearch", started_at=started_at)
+            try:
+                jsearch_source = JSearchJobSource(
+                    api_key=cfg.jsearch_api_key,
+                    rapidapi_host=cfg.jsearch_rapidapi_host,
+                    timeout=15,
+                )
+                jsearch_res = jsearch_source.fetch_source_jobs(keywords=cfg.keywords, config=cfg)
+                jsearch_new_count = 0
+                for job in jsearch_res.jobs:
+                    jobs_fetched += 1
+                    if insert_job(conn, job):
+                        new_jobs += 1
+                        jsearch_new_count += 1
+                    else:
+                        existing_jobs += 1
+
+                record_source_run_finish(
+                    conn,
+                    run_id=jsearch_run_id,
+                    status=jsearch_res.status,
+                    jobs_fetched=jsearch_res.total_fetched,
+                    new_jobs=jsearch_new_count,
+                    error_message=jsearch_res.error_message,
+                )
+                if jsearch_res.status in (SourceStatus.FAILED, SourceStatus.BLOCKED, SourceStatus.PARTIAL_FAILURE):
+                    failed_sources += 1
+            except Exception as e:
+                logger.error("Failure during JSearch job ingestion: %s", str(e))
+                failed_sources += 1
+                record_source_run_finish(
+                    conn,
+                    run_id=jsearch_run_id,
+                    status=SourceStatus.FAILED,
+                    jobs_fetched=0,
+                    new_jobs=0,
+                    error_message=str(e),
+                )
+
+        # ----------------------------------------------------
+        # Phase 10: Ingestion - SerpApi (Google Jobs)
+        # ----------------------------------------------------
+        if cfg.source_serpapi_enabled and cfg.serpapi_key:
+            serpapi_run_id = record_source_run_start(conn, "SerpApi", started_at=started_at)
+            try:
+                serpapi_source = SerpApiJobSource(api_key=cfg.serpapi_key, timeout=15)
+                serpapi_res = serpapi_source.fetch_source_jobs(keywords=cfg.keywords, config=cfg)
+                serpapi_new_count = 0
+                for job in serpapi_res.jobs:
+                    jobs_fetched += 1
+                    if insert_job(conn, job):
+                        new_jobs += 1
+                        serpapi_new_count += 1
+                    else:
+                        existing_jobs += 1
+
+                record_source_run_finish(
+                    conn,
+                    run_id=serpapi_run_id,
+                    status=serpapi_res.status,
+                    jobs_fetched=serpapi_res.total_fetched,
+                    new_jobs=serpapi_new_count,
+                    error_message=serpapi_res.error_message,
+                )
+                if serpapi_res.status in (SourceStatus.FAILED, SourceStatus.BLOCKED, SourceStatus.PARTIAL_FAILURE):
+                    failed_sources += 1
+            except Exception as e:
+                logger.error("Failure during SerpApi job ingestion: %s", str(e))
+                failed_sources += 1
+                record_source_run_finish(
+                    conn,
+                    run_id=serpapi_run_id,
+                    status=SourceStatus.FAILED,
+                    jobs_fetched=0,
+                    new_jobs=0,
+                    error_message=str(e),
+                )
 
         # ----------------------------------------------------
         # Phase 2: Resume Matching Engine

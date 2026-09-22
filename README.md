@@ -187,3 +187,6 @@ The full test suite runs completely offline with synthetic Gemini/OpenAI respons
 python3 -m compileall app tests
 pytest -q
 ```
+.venv/bin/python3 -m app.main --server
+cd frontend
+npm run dev

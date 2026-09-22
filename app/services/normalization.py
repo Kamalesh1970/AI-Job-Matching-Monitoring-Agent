@@ -486,3 +486,142 @@ def normalize_jooble_job(raw_job: Dict[str, Any]) -> Job:
         fingerprint=fingerprint,
     )
 
+
+def normalize_jsearch_job(raw_job: Dict[str, Any]) -> Job:
+    """Normalizes a raw JSearch RapidAPI job dictionary into a Job dataclass."""
+    if not isinstance(raw_job, dict):
+        raw_job = {}
+
+    source = "JSearch"
+    source_job_id = str(raw_job.get("job_id") or "").strip()
+    title = strip_html(raw_job.get("job_title", ""))
+    company = strip_html(raw_job.get("employer_name", ""))
+
+    loc_parts = []
+    for k in ["job_city", "job_state", "job_country"]:
+        val = raw_job.get(k)
+        if val and isinstance(val, str) and val.strip():
+            loc_parts.append(val.strip())
+    location = ", ".join(loc_parts)
+    is_remote = False
+    if raw_job.get("job_is_remote") in (True, 1, "true", "True", "TRUE"):
+        is_remote = True
+    elif raw_job.get("job_work_from_home") in (True, 1, "true", "True", "TRUE"):
+        is_remote = True
+    elif raw_job.get("work_from_home") in (True, 1, "true", "True", "TRUE"):
+        is_remote = True
+
+    if is_remote and "remote" not in location.lower():
+        if location:
+            location = f"{location} (Remote)"
+        else:
+            location = "Remote"
+
+    description = strip_html(raw_job.get("job_description", ""))
+    url = str(raw_job.get("job_apply_link") or raw_job.get("job_google_link") or "").strip()
+
+    created_at = raw_job.get("job_posted_at_datetime_utc") or raw_job.get("job_posted_at_timestamp")
+    if created_at is not None:
+        if isinstance(created_at, (int, float)):
+            created_at = datetime.fromtimestamp(created_at, tz=timezone.utc).isoformat()
+        else:
+            created_at = str(created_at).strip()
+
+    employment_type = raw_job.get("job_employment_type")
+    if employment_type:
+        employment_type = str(employment_type).strip()
+
+    salary_min = normalize_salary(raw_job.get("job_min_salary"))
+    salary_max = normalize_salary(raw_job.get("job_max_salary"))
+    salary_currency = raw_job.get("job_salary_currency")
+    if salary_currency:
+        salary_currency = str(salary_currency).strip().upper()
+
+    fetched_at = datetime.now(timezone.utc).isoformat()
+    fingerprint = generate_fingerprint(company=company, title=title, location=location)
+
+    return Job(
+        source=source,
+        source_job_id=source_job_id,
+        title=title,
+        company=company,
+        location=location,
+        description=description,
+        url=url,
+        created_at=created_at,
+        fetched_at=fetched_at,
+        salary_min=salary_min,
+        salary_max=salary_max,
+        salary_currency=salary_currency,
+        employment_type=employment_type,
+        fingerprint=fingerprint,
+    )
+
+
+def normalize_serpapi_job(raw_job: Dict[str, Any]) -> Job:
+    """Normalizes a raw SerpApi Google Jobs dictionary into a Job dataclass."""
+    if not isinstance(raw_job, dict):
+        raw_job = {}
+
+    source = "SerpApi"
+    source_job_id = str(raw_job.get("job_id") or raw_job.get("id") or "").strip()
+    title = strip_html(raw_job.get("title", ""))
+    company = strip_html(raw_job.get("company_name", ""))
+    location = strip_html(raw_job.get("location", ""))
+    description = strip_html(raw_job.get("description", ""))
+
+    url = ""
+    apply_options = raw_job.get("apply_options")
+    if isinstance(apply_options, list) and len(apply_options) > 0:
+        first_opt = apply_options[0]
+        if isinstance(first_opt, dict):
+            url = str(first_opt.get("link") or "").strip()
+    if not url:
+        url = str(raw_job.get("share_link") or "").strip()
+
+    created_at = None
+    employment_type = None
+    salary_min = None
+    salary_max = None
+    salary_currency = None
+
+    detected_ext = raw_job.get("detected_extensions")
+    if isinstance(detected_ext, dict):
+        created_at = detected_ext.get("posted_at")
+        employment_type = detected_ext.get("schedule_type")
+        salary_str = detected_ext.get("salary")
+        if salary_str:
+            nums = [float(n.replace(",", "")) for n in re.findall(r"\d[\d,]*", str(salary_str))]
+            if nums:
+                salary_min = nums[0]
+                salary_max = nums[-1] if len(nums) > 1 else nums[0]
+
+    if created_at is None:
+        created_at = raw_job.get("posted_at")
+    if created_at is not None:
+        created_at = str(created_at).strip()
+
+    if employment_type is not None:
+        employment_type = str(employment_type).strip()
+
+    fetched_at = datetime.now(timezone.utc).isoformat()
+    fingerprint = generate_fingerprint(company=company, title=title, location=location)
+
+    return Job(
+        source=source,
+        source_job_id=source_job_id,
+        title=title,
+        company=company,
+        location=location,
+        description=description,
+        url=url,
+        created_at=created_at,
+        fetched_at=fetched_at,
+        salary_min=salary_min,
+        salary_max=salary_max,
+        salary_currency=salary_currency,
+        employment_type=employment_type,
+        fingerprint=fingerprint,
+    )
+
+

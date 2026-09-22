@@ -20,8 +20,10 @@ from app.sources.himalayas import HimalayasJobSource
 from app.sources.internshala import InternshalaJobSource
 from app.sources.jobicy import JobicyJobSource
 from app.sources.jooble import JoobleJobSource
+from app.sources.jsearch import JSearchJobSource
 from app.sources.registry import JobSourceRegistry, create_default_source_registry
 from app.sources.remoteok import RemoteOKJobSource
+from app.sources.serpapi import SerpApiJobSource
 
 __all__ = [
     "BaseJobSource",
@@ -41,6 +43,8 @@ __all__ = [
     "JobicyJobSource",
     "HimalayasJobSource",
     "JoobleJobSource",
+    "JSearchJobSource",
+    "SerpApiJobSource",
     "JobSourceRegistry",
     "create_default_source_registry",
 ]
