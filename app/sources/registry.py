@@ -7,6 +7,7 @@ import logging
 from typing import Dict, List, Optional, Set
 
 from app.config import Config
+from app.sources.active_jobs_db import ActiveJobsDBJobSource
 from app.sources.adzuna import AdzunaJobSource
 from app.sources.arbeitnow import ArbeitnowJobSource
 from app.sources.base import BaseJobSource
@@ -218,5 +219,11 @@ def create_default_source_registry(config: Optional[Config] = None) -> JobSource
 
     serpapi = SerpApiJobSource(api_key=config.serpapi_key)
     registry.register(serpapi)
+
+    active_jobs_db = ActiveJobsDBJobSource(
+        api_key=config.active_jobs_db_api_key,
+        rapidapi_host=config.active_jobs_db_rapidapi_host,
+    )
+    registry.register(active_jobs_db)
 
     return registry

@@ -625,3 +625,68 @@ def normalize_serpapi_job(raw_job: Dict[str, Any]) -> Job:
     )
 
 
+def normalize_active_jobs_db_job(raw_job: Dict[str, Any]) -> Job:
+    """Normalizes a raw Active Jobs DB RapidAPI dictionary into a Job dataclass."""
+    if not isinstance(raw_job, dict):
+        raw_job = {}
+
+    source = "Active Jobs DB"
+    raw_id = raw_job.get("id") or raw_job.get("job_id") or raw_job.get("guid") or raw_job.get("url")
+    source_job_id = str(raw_id).strip() if raw_id is not None else ""
+
+    title = strip_html(raw_job.get("title") or raw_job.get("job_title", ""))
+    company = strip_html(raw_job.get("company") or raw_job.get("company_name") or raw_job.get("organization", ""))
+
+    loc_val = raw_job.get("location") or raw_job.get("job_location") or raw_job.get("locations")
+    location = ""
+    if isinstance(loc_val, list):
+        location = ", ".join([str(l).strip() for l in loc_val if l])
+    elif loc_val:
+        location = str(loc_val).strip()
+    location = strip_html(location)
+
+    description = strip_html(raw_job.get("description") or raw_job.get("job_description") or raw_job.get("snippet", ""))
+    url = str(raw_job.get("url") or raw_job.get("apply_url") or raw_job.get("job_url") or raw_job.get("redirect_url") or "").strip()
+
+    created_at = raw_job.get("posted_at") or raw_job.get("created_at") or raw_job.get("date_posted") or raw_job.get("timestamp")
+    if created_at is not None:
+        if isinstance(created_at, (int, float)):
+            created_at = datetime.fromtimestamp(created_at, tz=timezone.utc).isoformat()
+        else:
+            created_at = str(created_at).strip()
+
+    emp_type = raw_job.get("employment_type") or raw_job.get("job_type") or raw_job.get("type")
+    employment_type = None
+    if isinstance(emp_type, list):
+        employment_type = ", ".join([str(t).strip() for t in emp_type if t])
+    elif emp_type:
+        employment_type = str(emp_type).strip()
+
+    salary_min = normalize_salary(raw_job.get("salary_min") or raw_job.get("min_salary"))
+    salary_max = normalize_salary(raw_job.get("salary_max") or raw_job.get("max_salary"))
+    salary_currency = raw_job.get("salary_currency") or raw_job.get("currency")
+    if salary_currency:
+        salary_currency = str(salary_currency).strip().upper()
+
+    fetched_at = datetime.now(timezone.utc).isoformat()
+    fingerprint = generate_fingerprint(company=company, title=title, location=location)
+
+    return Job(
+        source=source,
+        source_job_id=source_job_id,
+        title=title,
+        company=company,
+        location=location,
+        description=description,
+        url=url,
+        created_at=created_at,
+        fetched_at=fetched_at,
+        salary_min=salary_min,
+        salary_max=salary_max,
+        salary_currency=salary_currency,
+        employment_type=employment_type,
+        fingerprint=fingerprint,
+    )
+
+
+

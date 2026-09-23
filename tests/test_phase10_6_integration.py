@@ -36,6 +36,7 @@ from app.services.normalization import (
 )
 from app.services.pipeline_service import PipelineRunSummary, PipelineService, PipelineStatus
 from app.services.telegram_notifier import TelegramNotifier
+from app.sources.active_jobs_db import ActiveJobsDBJobSource
 from app.sources.adzuna import AdzunaJobSource
 from app.sources.arbeitnow import ArbeitnowJobSource
 from app.sources.base import BaseJobSource
@@ -100,6 +101,8 @@ def mock_config():
         source_jooble_enabled=True,
         source_jsearch_enabled=True,
         source_serpapi_enabled=True,
+        source_active_jobs_db_enabled=True,
+        active_jobs_db_api_key="test_key",
         source_naukri_enabled=True,
         source_glassdoor_enabled=True,
         source_unstop_enabled=True,
@@ -122,11 +125,11 @@ def mock_config():
 # ============================================================================
 
 def test_complete_source_registry(mock_config):
-    """Verify create_default_source_registry registers all 18 job sources."""
+    """Verify create_default_source_registry registers all 19 job sources."""
     registry = create_default_source_registry(mock_config)
     sources = registry.list_sources()
 
-    assert len(sources) == 18, f"Expected 18 registered sources, got {len(sources)}"
+    assert len(sources) == 19, f"Expected 19 registered sources, got {len(sources)}"
 
     expected_identifiers = {
         "adzuna": "api",
@@ -147,6 +150,7 @@ def test_complete_source_registry(mock_config):
         "jooble": "api",
         "jsearch": "api",
         "serpapi": "api",
+        "active_jobs_db": "api",
     }
 
     registered_map = {s.source_identifier: s.source_type for s in sources}
@@ -168,7 +172,7 @@ def test_registry_dynamic_enable_disable(mock_config):
     enabled_sources = registry.list_enabled_sources(mock_config)
     enabled_ids = {s.source_identifier for s in enabled_sources}
     assert "adzuna" not in enabled_ids
-    assert len(enabled_sources) == 17
+    assert len(enabled_sources) == 18
 
     registry.enable_source("adzuna")
     assert registry.is_source_enabled("adzuna", mock_config) is True
@@ -616,9 +620,10 @@ def test_end_to_end_multi_source_pipeline(memory_db, mock_config):
         ("jooble", JoobleJobSource, "api", {"id": "matrix_jbl", "title": "NLP Eng", "link": "https://jooble.org/1"}),
         ("jsearch", JSearchJobSource, "api", {"job_id": "matrix_js", "job_title": "ML Eng"}),
         ("serpapi", SerpApiJobSource, "api", {"job_id": "matrix_serp", "title": "AI Specialist"}),
+        ("active_jobs_db", ActiveJobsDBJobSource, "api", {"id": "matrix_act", "title": "GenAI Architect"}),
     ],
 )
-def test_18_source_integration_matrix(identifier, source_class, expected_type, test_raw_payload, mock_config):
+def test_19_source_integration_matrix(identifier, source_class, expected_type, test_raw_payload, mock_config):
     """
     Matrix test validating every source for:
     (Identifier, Class, Type, Enabled Status, Registry Lookup).

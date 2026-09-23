@@ -31,10 +31,10 @@ def mock_config():
     )
 
 
-def test_registry_registers_all_18_sources(mock_config):
+def test_registry_registers_all_19_sources(mock_config):
     registry = create_default_source_registry(mock_config)
     sources = registry.list_sources()
-    assert len(sources) == 18
+    assert len(sources) == 19
 
     source_ids = {s.source_identifier for s in sources}
     expected_ids = {
@@ -56,8 +56,10 @@ def test_registry_registers_all_18_sources(mock_config):
         "jooble",
         "jsearch",
         "serpapi",
+        "active_jobs_db",
     }
     assert expected_ids.issubset(source_ids)
+    assert "google_jobs" not in source_ids
 
 
 def test_registry_lookup_jooble_jsearch_serpapi(mock_config):

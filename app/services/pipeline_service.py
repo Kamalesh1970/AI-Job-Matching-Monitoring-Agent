@@ -31,6 +31,7 @@ from app.services.digest_service import DigestService
 from app.services.health_service import HealthService
 from app.services.matching_service import MatchingService
 from app.services.telegram_notifier import TelegramNotifier
+from app.sources.active_jobs_db import ActiveJobsDBJobSource
 from app.sources.adzuna import AdzunaJobSource
 from app.sources.gmail import GmailAPIClient, IndeedAlertEmailSource, LinkedInAlertEmailSource
 from app.sources.internshala import InternshalaJobSource
@@ -471,6 +472,49 @@ class PipelineService:
                 record_source_run_finish(
                     conn,
                     run_id=serpapi_run_id,
+                    status=SourceStatus.FAILED,
+                    jobs_fetched=0,
+                    new_jobs=0,
+                    error_message=str(e),
+                )
+
+        # ----------------------------------------------------
+        # Ingestion - Active Jobs DB (RapidAPI)
+        # ----------------------------------------------------
+        if cfg.source_active_jobs_db_enabled and cfg.active_jobs_db_api_key:
+            active_jobs_run_id = record_source_run_start(conn, "Active Jobs DB", started_at=started_at)
+            try:
+                active_jobs_source = ActiveJobsDBJobSource(
+                    api_key=cfg.active_jobs_db_api_key,
+                    rapidapi_host=cfg.active_jobs_db_rapidapi_host,
+                    timeout=15,
+                )
+                active_jobs_res = active_jobs_source.fetch_source_jobs(keywords=cfg.keywords, config=cfg)
+                active_jobs_new_count = 0
+                for job in active_jobs_res.jobs:
+                    jobs_fetched += 1
+                    if insert_job(conn, job):
+                        new_jobs += 1
+                        active_jobs_new_count += 1
+                    else:
+                        existing_jobs += 1
+
+                record_source_run_finish(
+                    conn,
+                    run_id=active_jobs_run_id,
+                    status=active_jobs_res.status,
+                    jobs_fetched=active_jobs_res.total_fetched,
+                    new_jobs=active_jobs_new_count,
+                    error_message=active_jobs_res.error_message,
+                )
+                if active_jobs_res.status in (SourceStatus.FAILED, SourceStatus.BLOCKED, SourceStatus.PARTIAL_FAILURE):
+                    failed_sources += 1
+            except Exception as e:
+                logger.error("Failure during Active Jobs DB job ingestion: %s", str(e))
+                failed_sources += 1
+                record_source_run_finish(
+                    conn,
+                    run_id=active_jobs_run_id,
                     status=SourceStatus.FAILED,
                     jobs_fetched=0,
                     new_jobs=0,

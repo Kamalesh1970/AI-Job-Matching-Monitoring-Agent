@@ -18,7 +18,8 @@ This document provides official developer documentation for all job sources inte
 | **Himalayas** | `himalayas` | REST API | `GET https://himalayas.app/jobs/api` | None | Free Public API | `IMPLEMENTED` |
 | **Jooble** | `jooble` | REST API | `POST https://jooble.org/api/{api_key}` | `JOOBLE_API_KEY` | Free Tier (API Key) | `IMPLEMENTED` |
 | **JSearch** | `jsearch` | REST API | `GET https://jsearch.p.rapidapi.com/search` | `JSEARCH_API_KEY`, `JSEARCH_RAPIDAPI_HOST` | RapidAPI Free Tier | `IMPLEMENTED` |
-| **SerpApi** | `serpapi` | REST API | `GET https://serpapi.com/search?engine=google_jobs` | `SERPAPI_KEY` | Free Tier (100 searches/mo) | `IMPLEMENTED` |
+| **SerpApi (Google Jobs)** | `serpapi` | REST API | `GET https://serpapi.com/search?engine=google_jobs` | `SERPAPI_KEY` | Free Tier (100 searches/mo) | `IMPLEMENTED` |
+| **Active Jobs DB** | `active_jobs_db` | REST API | `GET https://active-jobs-db.p.rapidapi.com/active-ats-promoted-jobs` | `ACTIVE_JOBS_DB_API_KEY`, `ACTIVE_JOBS_DB_RAPIDAPI_HOST` | RapidAPI Free Tier | `IMPLEMENTED` |
 | **Naukri Email** | `naukri_email` | Gmail API | Read-Only Gmail OAuth 2.0 (`gmail.readonly`) | `credentials.json` / `token.json` | Free | `IMPLEMENTED` |
 | **Glassdoor Email** | `glassdoor_email` | Gmail API | Read-Only Gmail OAuth 2.0 (`gmail.readonly`) | `credentials.json` / `token.json` | Free | `IMPLEMENTED` |
 | **Unstop Email** | `unstop_email` | Gmail API | Read-Only Gmail OAuth 2.0 (`gmail.readonly`) | `credentials.json` / `token.json` | Free | `IMPLEMENTED` |
@@ -99,19 +100,59 @@ This document provides official developer documentation for all job sources inte
 - **Rate Limits**: Subject to RapidAPI subscription plan rate limits.
 - **Status**: `IMPLEMENTED`
 
-### 2.7 SerpApi (Google Jobs)
+### 2.7 SerpApi (Google Jobs Engine)
 - **Source Identifier**: `serpapi`
 - **Class**: `SerpApiJobSource` ([`app/sources/serpapi.py`](file:///home/kamalesh/AI%20Job-Matching%20%26%20Monitoring%20Agent/app/sources/serpapi.py))
 - **Access Endpoint**: `https://serpapi.com/search?engine=google_jobs` (HTTP GET)
 - **Parameters**: `engine=google_jobs`, `q={keyword}`, `location={location}`, `api_key={key}`, `output=json`
-- **Authentication**: SerpApi API key.
+- **Authentication**: SerpApi API key (`SERPAPI_KEY`).
 - **Environment Variables**:
   - `SOURCE_SERPAPI_ENABLED=true` (Default: `true`)
   - `SERPAPI_KEY=your_serpapi_key`
 - **Rate Limits**: 100 free searches per month on developer plan.
 - **Status**: `IMPLEMENTED`
 
-### 2.8 Email Alert Sources (Naukri, Glassdoor, Unstop, foundit, Cutshort, Hirist, Wellfound, LinkedIn, Indeed)
+### 2.8 Active Jobs DB (RapidAPI)
+- **Source Identifier**: `active_jobs_db`
+- **Class**: `ActiveJobsDBJobSource` ([`app/sources/active_jobs_db.py`](file:///home/kamalesh/AI%20Job-Matching%20%26%20Monitoring%20Agent/app/sources/active_jobs_db.py))
+- **Access Endpoint**: `https://active-jobs-db.p.rapidapi.com/active-ats-promoted-jobs` (HTTP GET)
+- **Headers**:
+  - `X-RapidAPI-Key`: `ACTIVE_JOBS_DB_API_KEY`
+  - `X-RapidAPI-Host`: `ACTIVE_JOBS_DB_RAPIDAPI_HOST` (Default: `active-jobs-db.p.rapidapi.com`)
+- **Parameters**: `title_filter={keyword}`, `location_filter={location}`, `limit=20`, `offset=0`
+- **Authentication**: RapidAPI API Key (`ACTIVE_JOBS_DB_API_KEY`).
+- **Environment Variables**:
+  - `SOURCE_ACTIVE_JOBS_DB_ENABLED=false` (Default: `false`)
+  - `ACTIVE_JOBS_DB_API_KEY=your_rapidapi_key`
+  - `ACTIVE_JOBS_DB_RAPIDAPI_HOST=active-jobs-db.p.rapidapi.com`
+- **Rate Limits**: Subject to RapidAPI tier request and job limits.
+- **Status**: `IMPLEMENTED`
+
+### 2.9 LinkedIn Jobs API (Authorized API Only)
+- **Source Identifier**: N/A (Configuration placeholder only; no registry source added)
+- **Provider**: Official LinkedIn API / Talent Solutions (Partner Access Required)
+- **Authentication**: OAuth 2.0 / Client Credentials (`LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET`, `LINKEDIN_ACCESS_TOKEN`)
+- **Environment Variables**:
+  - `SOURCE_LINKEDIN_API_ENABLED=false` (Default: `false`)
+  - `LINKEDIN_CLIENT_ID=`
+  - `LINKEDIN_CLIENT_SECRET=`
+  - `LINKEDIN_ACCESS_TOKEN=`
+- **Status**: `DISABLED_PENDING_CREDENTIALS`
+- **Operational Note**: Direct web scraping or CAPTCHA bypass is strictly prohibited. LinkedIn job alerts ingested via Gmail API (`linkedin_alert_email`) remain fully supported and operational independently.
+
+### 2.10 Indeed Jobs API (Authorized API Only)
+- **Source Identifier**: N/A (Configuration placeholder only; no registry source added)
+- **Provider**: Official Indeed Partner API / OAuth
+- **Authentication**: OAuth 2.0 / Authorized Credentials (`INDEED_CLIENT_ID`, `INDEED_CLIENT_SECRET`, `INDEED_ACCESS_TOKEN`)
+- **Environment Variables**:
+  - `SOURCE_INDEED_API_ENABLED=false` (Default: `false`)
+  - `INDEED_CLIENT_ID=`
+  - `INDEED_CLIENT_SECRET=`
+  - `INDEED_ACCESS_TOKEN=`
+- **Status**: `DISABLED_PENDING_CREDENTIALS`
+- **Operational Note**: Direct web scraping or anti-bot bypass is strictly prohibited. Indeed job alerts ingested via Gmail API (`indeed_alert_email`) remain fully supported and operational independently.
+
+### 2.11 Email Alert Sources (Naukri, Glassdoor, Unstop, foundit, Cutshort, Hirist, Wellfound, LinkedIn, Indeed)
 - **Access Mechanism**: Read-Only Gmail API (`gmail.readonly`) parsing structured HTML/text alert emails.
 - **Authentication**: `credentials.json` and `token.json` OAuth 2.0 flow.
 - **Environment Variables**:
@@ -125,3 +166,4 @@ This document provides official developer documentation for all job sources inte
 
 - **Level 1 Source Deduplication**: `(source, source_job_id)` is enforced at database level with unique SQLite constraints.
 - **Level 2 Cross-Source Deduplication**: A 64-character SHA-256 fingerprint digest (`generate_fingerprint`) is computed from normalized `(company, title, location)`. Equivalent listings across different job sources (e.g. Jooble vs JSearch vs SerpApi) are deduplicated during pipeline execution while preserving source provenance.
+

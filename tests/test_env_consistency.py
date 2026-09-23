@@ -40,9 +40,12 @@ def test_env_example_representation():
         "JSEARCH_API_KEY",
         "JSEARCH_RAPIDAPI_HOST",
         "SERPAPI_KEY",
+        "ACTIVE_JOBS_DB_API_KEY",
+        "ACTIVE_JOBS_DB_RAPIDAPI_HOST",
         "SOURCE_JOOBLE_ENABLED",
         "SOURCE_JSEARCH_ENABLED",
         "SOURCE_SERPAPI_ENABLED",
+        "SOURCE_ACTIVE_JOBS_DB_ENABLED",
     ]
 
     missing_from_example = [key for key in required_job_source_keys if key not in env_example_keys]
@@ -63,8 +66,11 @@ def test_config_dataclass_fields_covered():
         jooble_api_key="test",
         jsearch_api_key="test",
         serpapi_key="test",
+        active_jobs_db_api_key="test",
     )
     assert hasattr(config_sample, "source_jooble_enabled")
     assert hasattr(config_sample, "source_jsearch_enabled")
     assert hasattr(config_sample, "source_serpapi_enabled")
+    assert hasattr(config_sample, "source_active_jobs_db_enabled")
     assert hasattr(config_sample, "jsearch_rapidapi_host")
+    assert hasattr(config_sample, "active_jobs_db_rapidapi_host")

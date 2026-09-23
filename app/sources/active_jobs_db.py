@@ -1,6 +1,6 @@
 """
-JSearch API job source fetcher client (RapidAPI).
-Endpoint: GET https://jsearch.p.rapidapi.com/search
+Active Jobs DB job source fetcher client (RapidAPI).
+Endpoint: GET https://active-jobs-db.p.rapidapi.com/active-ats-promoted-jobs
 """
 
 import logging
@@ -14,14 +14,13 @@ from app.sources.base import BaseJobSource
 logger = logging.getLogger(__name__)
 
 
-class JSearchJobSource(BaseJobSource):
+class ActiveJobsDBJobSource(BaseJobSource):
     """
-    Client for fetching job postings via JSearch API on RapidAPI.
+    Client for fetching job postings via Active Jobs DB on RapidAPI.
     Requires X-RapidAPI-Key and X-RapidAPI-Host headers.
     """
 
-    DEFAULT_HOST = "jsearch.p.rapidapi.com"
-    BASE_URL = "https://jsearch.p.rapidapi.com/search"
+    DEFAULT_HOST = "active-jobs-db.p.rapidapi.com"
 
     def __init__(
         self,
@@ -35,11 +34,11 @@ class JSearchJobSource(BaseJobSource):
 
     @property
     def name(self) -> str:
-        return "JSearch"
+        return "Active Jobs DB"
 
     @property
     def source_identifier(self) -> str:
-        return "jsearch"
+        return "active_jobs_db"
 
     @property
     def source_type(self) -> str:
@@ -47,9 +46,9 @@ class JSearchJobSource(BaseJobSource):
 
     def is_enabled(self, config: Optional[Any] = None) -> bool:
         if config is not None:
-            if hasattr(config, "source_jsearch_enabled") and not config.source_jsearch_enabled:
+            if hasattr(config, "source_active_jobs_db_enabled") and not config.source_active_jobs_db_enabled:
                 return False
-            key = getattr(config, "jsearch_api_key", "") or self.api_key
+            key = getattr(config, "active_jobs_db_api_key", "") or self.api_key
             return bool(key and str(key).strip())
         return bool(self.api_key)
 
@@ -67,78 +66,81 @@ class JSearchJobSource(BaseJobSource):
         results_per_page: int = 20,
     ) -> List[Dict[str, Any]]:
         """
-        Fetches raw job dictionaries from JSearch RapidAPI endpoint.
+        Fetches raw job dictionaries from Active Jobs DB RapidAPI endpoint.
         """
         if not self.api_key:
-            logger.warning("JSearch API key missing; skipping request.")
+            logger.warning("Active Jobs DB API key missing; skipping request.")
             return []
 
-        search_query = f"{keyword} in {location}".strip() if location else keyword
+        host = self.rapidapi_host.strip()
+        url = f"https://{host}/active-ats-promoted-jobs" if not host.startswith("http") else host
 
         headers = {
             "X-RapidAPI-Key": self.api_key,
-            "X-RapidAPI-Host": self.rapidapi_host,
+            "X-RapidAPI-Host": host,
         }
         params = {
-            "query": search_query,
-            "page": str(page),
-            "num_pages": "1",
+            "title_filter": keyword,
+            "location_filter": location or "India",
+            "limit": str(results_per_page),
+            "offset": str((page - 1) * results_per_page),
         }
 
-        # Build resolved URL dynamically from rapidapi_host
-        host = self.rapidapi_host.strip()
-        url = f"https://{host}/search" if not host.startswith("http") else host
-
-        logger.info(
-            "JSearch Debug Config: host=%r, key_len=%d, key_stripped_len=%d",
-            self.rapidapi_host,
-            len(self.api_key),
-            len(self.api_key.strip()),
-        )
-        logger.info("Requesting JSearch API URL: %s (query='%s', page=%d)", url, search_query, page)
+        logger.info("Requesting Active Jobs DB URL: %s (keyword='%s', location='%s')", url, keyword, location)
 
         try:
-            req = requests.Request("GET", url, headers=headers, params=params).prepare()
-            logger.info("JSearch FULL Resolved URL (at runtime): %s", req.url)
-
             response = requests.get(
                 url,
                 headers=headers,
                 params=params,
                 timeout=self.timeout,
             )
-            logger.info("JSearch HTTP Status: %d, Final Request URL: %s", response.status_code, response.request.url)
+
+            # Fallback to alternate endpoint structure if primary endpoint 404s
+            if response.status_code == 404:
+                alt_url = f"https://{host}/active-ats-jobs"
+                logger.info("Retrying Active Jobs DB with alternate endpoint: %s", alt_url)
+                response = requests.get(
+                    alt_url,
+                    headers=headers,
+                    params={"q": keyword, "location": location, "limit": str(results_per_page)},
+                    timeout=self.timeout,
+                )
+
             response.raise_for_status()
             data = response.json()
 
-            if not isinstance(data, dict):
-                logger.error("Unexpected response format from JSearch API: expected dict")
+            if isinstance(data, list):
+                return data
+
+            if isinstance(data, dict):
+                for field in ["hits", "jobs", "data", "results"]:
+                    res_list = data.get(field)
+                    if isinstance(res_list, list):
+                        return res_list
+                logger.error("Unexpected dict structure from Active Jobs DB API")
                 return []
 
-            results = data.get("data")
-            if not isinstance(results, list):
-                logger.error("Malformed 'data' field from JSearch API")
-                return []
-
-            return results
+            logger.error("Unexpected response format from Active Jobs DB API")
+            return []
 
         except requests.exceptions.Timeout:
-            logger.error("Timeout fetching from JSearch API")
+            logger.error("Timeout fetching from Active Jobs DB API")
             return []
         except requests.exceptions.HTTPError as e:
             sanitized = self._sanitize_error(str(e))
-            logger.error("HTTP error fetching from JSearch API: %s", sanitized)
+            logger.error("HTTP error fetching from Active Jobs DB API: %s", sanitized)
             return []
         except requests.exceptions.RequestException as e:
             sanitized = self._sanitize_error(str(e))
-            logger.error("Network error fetching from JSearch API: %s", sanitized)
+            logger.error("Network error fetching from Active Jobs DB API: %s", sanitized)
             return []
         except ValueError as e:
-            logger.error("Invalid JSON response from JSearch API: %s", str(e))
+            logger.error("Invalid JSON response from Active Jobs DB API: %s", str(e))
             return []
         except Exception as e:
             sanitized = self._sanitize_error(str(e))
-            logger.error("Unexpected error fetching from JSearch API: %s", sanitized)
+            logger.error("Unexpected error fetching from Active Jobs DB API: %s", sanitized)
             return []
 
     def fetch_source_jobs(
@@ -151,7 +153,7 @@ class JSearchJobSource(BaseJobSource):
         """
         Executes fetch across keywords and returns structured SourceResult.
         """
-        from app.services.normalization import normalize_jsearch_job
+        from app.services.normalization import normalize_active_jobs_db_job
 
         start_time = time.time()
 
@@ -159,8 +161,8 @@ class JSearchJobSource(BaseJobSource):
         effective_host = self.rapidapi_host
 
         if config is not None:
-            effective_key = getattr(config, "jsearch_api_key", "") or self.api_key
-            effective_host = getattr(config, "jsearch_rapidapi_host", "") or self.rapidapi_host
+            effective_key = getattr(config, "active_jobs_db_api_key", "") or self.api_key
+            effective_host = getattr(config, "active_jobs_db_rapidapi_host", "") or self.rapidapi_host
 
         if not effective_key:
             return SourceResult(
@@ -168,7 +170,7 @@ class JSearchJobSource(BaseJobSource):
                 status=SourceStatus.DISABLED,
                 jobs=[],
                 total_fetched=0,
-                error_message="JSearch API key not configured.",
+                error_message="Active Jobs DB API key not configured.",
                 duration_seconds=time.time() - start_time,
             )
 
@@ -184,7 +186,7 @@ class JSearchJobSource(BaseJobSource):
             try:
                 raw_jobs = self.fetch_jobs_raw(keyword=kw, location=target_location, page=1)
                 for rj in raw_jobs:
-                    all_jobs.append(normalize_jsearch_job(rj))
+                    all_jobs.append(normalize_active_jobs_db_job(rj))
             except Exception as e:
                 sanitized = self._sanitize_error(str(e))
                 errors.append(f"Keyword '{kw}': {sanitized}")

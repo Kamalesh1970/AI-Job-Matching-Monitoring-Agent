@@ -2,6 +2,7 @@
 Job sources module.
 """
 
+from app.sources.active_jobs_db import ActiveJobsDBJobSource
 from app.sources.adzuna import AdzunaJobSource
 from app.sources.arbeitnow import ArbeitnowJobSource
 from app.sources.base import BaseJobSource
@@ -27,6 +28,7 @@ from app.sources.serpapi import SerpApiJobSource
 
 __all__ = [
     "BaseJobSource",
+    "ActiveJobsDBJobSource",
     "AdzunaJobSource",
     "InternshalaJobSource",
     "LinkedInAlertEmailSource",
