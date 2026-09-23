@@ -64,10 +64,12 @@ from app.sources.gmail import (
     founditEmailParser,
 )
 from app.sources.himalayas import HimalayasJobSource
+from app.sources.indeed_jobs_api import IndeedJobsApiSource
 from app.sources.internshala import InternshalaJobSource
 from app.sources.jobicy import JobicyJobSource
 from app.sources.jooble import JoobleJobSource
 from app.sources.jsearch import JSearchJobSource
+from app.sources.linkedin_jobs_api import LinkedInJobsApiSource
 from app.sources.registry import JobSourceRegistry, create_default_source_registry
 from app.sources.remoteok import RemoteOKJobSource
 from app.sources.serpapi import SerpApiJobSource
@@ -129,13 +131,15 @@ def test_complete_source_registry(mock_config):
     registry = create_default_source_registry(mock_config)
     sources = registry.list_sources()
 
-    assert len(sources) == 19, f"Expected 19 registered sources, got {len(sources)}"
+    assert len(sources) == 21, f"Expected 21 registered sources, got {len(sources)}"
 
     expected_identifiers = {
         "adzuna": "api",
         "internshala": "scraper",
         "linkedin_email": "email_alert",
         "indeed_email": "email_alert",
+        "linkedin_jobs_api": "api",
+        "indeed_jobs_api": "api",
         "naukri_email": "email_alert",
         "glassdoor_email": "email_alert",
         "unstop_email": "email_alert",
@@ -621,9 +625,11 @@ def test_end_to_end_multi_source_pipeline(memory_db, mock_config):
         ("jsearch", JSearchJobSource, "api", {"job_id": "matrix_js", "job_title": "ML Eng"}),
         ("serpapi", SerpApiJobSource, "api", {"job_id": "matrix_serp", "title": "AI Specialist"}),
         ("active_jobs_db", ActiveJobsDBJobSource, "api", {"id": "matrix_act", "title": "GenAI Architect"}),
+        ("linkedin_jobs_api", LinkedInJobsApiSource, "api", {"id": "matrix_lk_api", "title": "Lead AI Architect"}),
+        ("indeed_jobs_api", IndeedJobsApiSource, "api", {"id": "matrix_ind_api", "title": "Lead ML Architect"}),
     ],
 )
-def test_19_source_integration_matrix(identifier, source_class, expected_type, test_raw_payload, mock_config):
+def test_21_source_integration_matrix(identifier, source_class, expected_type, test_raw_payload, mock_config):
     """
     Matrix test validating every source for:
     (Identifier, Class, Type, Enabled Status, Registry Lookup).

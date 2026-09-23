@@ -22,14 +22,12 @@ def test_phase11_2_env_defaults():
     }
     with mock.patch.dict(os.environ, env, clear=True):
         cfg = load_config(load_env_file=False)
-        assert cfg.source_linkedin_api_enabled is False
-        assert cfg.source_indeed_api_enabled is False
-        assert cfg.linkedin_client_id == ""
-        assert cfg.linkedin_client_secret == ""
-        assert cfg.linkedin_access_token == ""
-        assert cfg.indeed_client_id == ""
-        assert cfg.indeed_client_secret == ""
-        assert cfg.indeed_access_token == ""
+        assert cfg.source_linkedin_jobs_api_enabled is False
+        assert cfg.source_indeed_jobs_api_enabled is False
+        assert cfg.linkedin_jobs_api_key == ""
+        assert cfg.linkedin_jobs_rapidapi_host == "linkedin-jobs-api.p.rapidapi.com"
+        assert cfg.indeed_jobs_api_key == ""
+        assert cfg.indeed_jobs_rapidapi_host == "indeed-jobs-api.p.rapidapi.com"
 
 
 def test_phase11_2_missing_credentials():
@@ -48,16 +46,16 @@ def test_phase11_2_enabled_disabled_behavior():
         "SOURCE_SERPAPI_ENABLED": "false",
         "SOURCE_ACTIVE_JOBS_DB_ENABLED": "true",
         "ACTIVE_JOBS_DB_API_KEY": "active_key",
-        "SOURCE_LINKEDIN_API_ENABLED": "true",
-        "LINKEDIN_CLIENT_ID": "lk_id",
-        "SOURCE_INDEED_API_ENABLED": "false",
+        "SOURCE_LINKEDIN_JOBS_API_ENABLED": "true",
+        "LINKEDIN_JOBS_API_KEY": "lk_key",
+        "SOURCE_INDEED_JOBS_API_ENABLED": "false",
     }
     with mock.patch.dict(os.environ, env, clear=True):
         cfg = load_config(load_env_file=False)
         assert cfg.source_serpapi_enabled is False
         assert cfg.source_active_jobs_db_enabled is True
-        assert cfg.source_linkedin_api_enabled is True
-        assert cfg.source_indeed_api_enabled is False
+        assert cfg.source_linkedin_jobs_api_enabled is True
+        assert cfg.source_indeed_jobs_api_enabled is False
 
 
 def test_phase11_2_secret_safe_config_reporting():
@@ -70,8 +68,8 @@ def test_phase11_2_secret_safe_config_reporting():
         "ACTIVE_JOBS_DB_API_KEY": "secret_active_key_456",
         "ACTIVE_JOBS_DB_RAPIDAPI_HOST": "active-jobs-db.p.rapidapi.com",
         "SOURCE_ACTIVE_JOBS_DB_ENABLED": "true",
-        "SOURCE_LINKEDIN_API_ENABLED": "false",
-        "SOURCE_INDEED_API_ENABLED": "false",
+        "SOURCE_LINKEDIN_JOBS_API_ENABLED": "false",
+        "SOURCE_INDEED_JOBS_API_ENABLED": "false",
     }
     with mock.patch.dict(os.environ, env, clear=True):
         cfg = load_config(load_env_file=False)
@@ -82,12 +80,10 @@ def test_phase11_2_secret_safe_config_reporting():
         assert report["ACTIVE_JOBS_DB_RAPIDAPI_HOST"] == "SET"
 
         # LinkedIn & Indeed API are disabled and missing secret values
-        assert report["LINKEDIN_CLIENT_ID"] in ("DISABLED", "MISSING")
-        assert report["LINKEDIN_CLIENT_SECRET"] in ("DISABLED", "MISSING")
-        assert report["LINKEDIN_ACCESS_TOKEN"] in ("DISABLED", "MISSING")
-        assert report["INDEED_CLIENT_ID"] in ("DISABLED", "MISSING")
-        assert report["INDEED_CLIENT_SECRET"] in ("DISABLED", "MISSING")
-        assert report["INDEED_ACCESS_TOKEN"] in ("DISABLED", "MISSING")
+        assert report["LINKEDIN_JOBS_API_KEY"] in ("DISABLED", "MISSING")
+        assert report["LINKEDIN_JOBS_RAPIDAPI_HOST"] in ("DISABLED", "SET", "MISSING")
+        assert report["INDEED_JOBS_API_KEY"] in ("DISABLED", "MISSING")
+        assert report["INDEED_JOBS_RAPIDAPI_HOST"] in ("DISABLED", "SET", "MISSING")
 
         # Secret values must NOT be present in the report
         for val in report.values():
@@ -107,14 +103,12 @@ def test_phase11_2_env_example_consistency():
         "ACTIVE_JOBS_DB_API_KEY",
         "ACTIVE_JOBS_DB_RAPIDAPI_HOST",
         "SOURCE_ACTIVE_JOBS_DB_ENABLED",
-        "LINKEDIN_CLIENT_ID",
-        "LINKEDIN_CLIENT_SECRET",
-        "LINKEDIN_ACCESS_TOKEN",
-        "SOURCE_LINKEDIN_API_ENABLED",
-        "INDEED_CLIENT_ID",
-        "INDEED_CLIENT_SECRET",
-        "INDEED_ACCESS_TOKEN",
-        "SOURCE_INDEED_API_ENABLED",
+        "LINKEDIN_JOBS_API_KEY",
+        "LINKEDIN_JOBS_RAPIDAPI_HOST",
+        "SOURCE_LINKEDIN_JOBS_API_ENABLED",
+        "INDEED_JOBS_API_KEY",
+        "INDEED_JOBS_RAPIDAPI_HOST",
+        "SOURCE_INDEED_JOBS_API_ENABLED",
     ]
 
     for key in required_keys:
@@ -164,19 +158,15 @@ def test_phase11_2_active_jobs_db_config():
 def test_phase11_2_linkedin_disabled_without_authorized_credentials():
     """8. Test LinkedIn API defaults to disabled when credentials are blank."""
     cfg = Config(adzuna_app_id="test", adzuna_app_key="test")
-    assert cfg.source_linkedin_api_enabled is False
-    assert cfg.linkedin_client_id == ""
-    assert cfg.linkedin_client_secret == ""
-    assert cfg.linkedin_access_token == ""
+    assert cfg.source_linkedin_jobs_api_enabled is False
+    assert cfg.linkedin_jobs_api_key == ""
 
 
 def test_phase11_2_indeed_disabled_without_authorized_credentials():
     """9. Test Indeed API defaults to disabled when credentials are blank."""
     cfg = Config(adzuna_app_id="test", adzuna_app_key="test")
-    assert cfg.source_indeed_api_enabled is False
-    assert cfg.indeed_client_id == ""
-    assert cfg.indeed_client_secret == ""
-    assert cfg.indeed_access_token == ""
+    assert cfg.source_indeed_jobs_api_enabled is False
+    assert cfg.indeed_jobs_api_key == ""
 
 
 def test_phase11_2_gmail_linkedin_source_unaffected():
@@ -197,23 +187,20 @@ def test_phase11_2_gmail_indeed_source_unaffected():
     assert indeed_email.source_identifier == "indeed_email"
 
 
-
 def test_phase11_2_registry_consistency():
-    """12. Test registry source count and absence of unauthorized API sources."""
+    """12. Test registry source count and presence of RapidAPI / Email sources."""
     cfg = Config(adzuna_app_id="test", adzuna_app_key="test")
     registry = create_default_source_registry(config=cfg)
     sources = registry.list_sources()
     source_ids = [s.source_identifier for s in sources]
 
-    # Exactly 19 registered sources
-    assert len(sources) == 19
+    # Exactly 21 registered sources
+    assert len(sources) == 21
 
-    # Verify no fake 'linkedin_api' or 'indeed_api' sources were created
-    assert "linkedin_api" not in source_ids
-    assert "indeed_api" not in source_ids
-    assert "google_jobs" not in source_ids
-
-    # Google Jobs uses serpapi, Active Jobs DB uses active_jobs_db
+    # Verify both Gmail and RapidAPI sources exist
+    assert "linkedin_email" in source_ids
+    assert "indeed_email" in source_ids
+    assert "linkedin_jobs_api" in source_ids
+    assert "indeed_jobs_api" in source_ids
     assert "serpapi" in source_ids
     assert "active_jobs_db" in source_ids
-

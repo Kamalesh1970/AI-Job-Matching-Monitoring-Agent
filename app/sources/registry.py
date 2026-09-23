@@ -23,10 +23,12 @@ from app.sources.gmail import (
     founditAlertEmailSource,
 )
 from app.sources.himalayas import HimalayasJobSource
+from app.sources.indeed_jobs_api import IndeedJobsApiSource
 from app.sources.internshala import InternshalaJobSource
 from app.sources.jobicy import JobicyJobSource
 from app.sources.jooble import JoobleJobSource
 from app.sources.jsearch import JSearchJobSource
+from app.sources.linkedin_jobs_api import LinkedInJobsApiSource
 from app.sources.remoteok import RemoteOKJobSource
 from app.sources.serpapi import SerpApiJobSource
 
@@ -225,5 +227,17 @@ def create_default_source_registry(config: Optional[Config] = None) -> JobSource
         rapidapi_host=config.active_jobs_db_rapidapi_host,
     )
     registry.register(active_jobs_db)
+
+    linkedin_jobs_api = LinkedInJobsApiSource(
+        api_key=config.linkedin_jobs_api_key,
+        rapidapi_host=config.linkedin_jobs_rapidapi_host,
+    )
+    registry.register(linkedin_jobs_api)
+
+    indeed_jobs_api = IndeedJobsApiSource(
+        api_key=config.indeed_jobs_api_key,
+        rapidapi_host=config.indeed_jobs_rapidapi_host,
+    )
+    registry.register(indeed_jobs_api)
 
     return registry

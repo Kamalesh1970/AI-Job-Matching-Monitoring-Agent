@@ -31,10 +31,10 @@ def mock_config():
     )
 
 
-def test_registry_registers_all_19_sources(mock_config):
+def test_registry_registers_all_21_sources(mock_config):
     registry = create_default_source_registry(mock_config)
     sources = registry.list_sources()
-    assert len(sources) == 19
+    assert len(sources) == 21
 
     source_ids = {s.source_identifier for s in sources}
     expected_ids = {
@@ -42,6 +42,8 @@ def test_registry_registers_all_19_sources(mock_config):
         "internshala",
         "linkedin_email",
         "indeed_email",
+        "linkedin_jobs_api",
+        "indeed_jobs_api",
         "naukri_email",
         "glassdoor_email",
         "unstop_email",

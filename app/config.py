@@ -119,8 +119,8 @@ class Config:
     source_jsearch_enabled: bool = True
     source_serpapi_enabled: bool = True
     source_active_jobs_db_enabled: bool = False
-    source_linkedin_api_enabled: bool = False
-    source_indeed_api_enabled: bool = False
+    source_linkedin_jobs_api_enabled: bool = False
+    source_indeed_jobs_api_enabled: bool = False
     source_naukri_enabled: bool = True
     source_glassdoor_enabled: bool = True
     source_unstop_enabled: bool = True
@@ -134,6 +134,10 @@ class Config:
     serpapi_key: str = ""
     active_jobs_db_api_key: str = ""
     active_jobs_db_rapidapi_host: str = "active-jobs-db.p.rapidapi.com"
+    linkedin_jobs_api_key: str = ""
+    linkedin_jobs_rapidapi_host: str = "linkedin-jobs-api.p.rapidapi.com"
+    indeed_jobs_api_key: str = ""
+    indeed_jobs_rapidapi_host: str = "indeed-jobs-api.p.rapidapi.com"
     linkedin_client_id: str = ""
     linkedin_client_secret: str = ""
     linkedin_access_token: str = ""
@@ -149,6 +153,14 @@ class Config:
     llm_temperature: float = 0.2
     llm_match_threshold: float = 0.75
 
+
+    @property
+    def source_linkedin_api_enabled(self) -> bool:
+        return self.source_linkedin_jobs_api_enabled
+
+    @property
+    def source_indeed_api_enabled(self) -> bool:
+        return self.source_indeed_jobs_api_enabled
 
     def __post_init__(self):
         """Validate matching weights sum up to 1.0."""
@@ -372,11 +384,11 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
     source_active_jobs_db_env = os.getenv("SOURCE_ACTIVE_JOBS_DB_ENABLED", "false").strip().lower()
     source_active_jobs_db_enabled = source_active_jobs_db_env in ("true", "1", "yes")
 
-    source_linkedin_api_env = os.getenv("SOURCE_LINKEDIN_API_ENABLED", "false").strip().lower()
-    source_linkedin_api_enabled = source_linkedin_api_env in ("true", "1", "yes")
+    source_linkedin_jobs_api_env = os.getenv("SOURCE_LINKEDIN_JOBS_API_ENABLED", os.getenv("SOURCE_LINKEDIN_API_ENABLED", "false")).strip().lower()
+    source_linkedin_jobs_api_enabled = source_linkedin_jobs_api_env in ("true", "1", "yes")
 
-    source_indeed_api_env = os.getenv("SOURCE_INDEED_API_ENABLED", "false").strip().lower()
-    source_indeed_api_enabled = source_indeed_api_env in ("true", "1", "yes")
+    source_indeed_jobs_api_env = os.getenv("SOURCE_INDEED_JOBS_API_ENABLED", os.getenv("SOURCE_INDEED_API_ENABLED", "false")).strip().lower()
+    source_indeed_jobs_api_enabled = source_indeed_jobs_api_env in ("true", "1", "yes")
 
     source_naukri_env = os.getenv("SOURCE_NAUKRI_ENABLED", "true").strip().lower()
     source_naukri_enabled = source_naukri_env in ("true", "1", "yes")
@@ -405,6 +417,10 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
     serpapi_key = os.getenv("SERPAPI_KEY", "").strip()
     active_jobs_db_api_key = os.getenv("ACTIVE_JOBS_DB_API_KEY", "").strip()
     active_jobs_db_rapidapi_host = os.getenv("ACTIVE_JOBS_DB_RAPIDAPI_HOST", "active-jobs-db.p.rapidapi.com").strip() or "active-jobs-db.p.rapidapi.com"
+    linkedin_jobs_api_key = os.getenv("LINKEDIN_JOBS_API_KEY", "").strip()
+    linkedin_jobs_rapidapi_host = os.getenv("LINKEDIN_JOBS_RAPIDAPI_HOST", "linkedin-jobs-api.p.rapidapi.com").strip() or "linkedin-jobs-api.p.rapidapi.com"
+    indeed_jobs_api_key = os.getenv("INDEED_JOBS_API_KEY", "").strip()
+    indeed_jobs_rapidapi_host = os.getenv("INDEED_JOBS_RAPIDAPI_HOST", "indeed-jobs-api.p.rapidapi.com").strip() or "indeed-jobs-api.p.rapidapi.com"
     linkedin_client_id = os.getenv("LINKEDIN_CLIENT_ID", "").strip()
     linkedin_client_secret = os.getenv("LINKEDIN_CLIENT_SECRET", "").strip()
     linkedin_access_token = os.getenv("LINKEDIN_ACCESS_TOKEN", "").strip()
@@ -494,8 +510,8 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
         source_jsearch_enabled=source_jsearch_enabled,
         source_serpapi_enabled=source_serpapi_enabled,
         source_active_jobs_db_enabled=source_active_jobs_db_enabled,
-        source_linkedin_api_enabled=source_linkedin_api_enabled,
-        source_indeed_api_enabled=source_indeed_api_enabled,
+        source_linkedin_jobs_api_enabled=source_linkedin_jobs_api_enabled,
+        source_indeed_jobs_api_enabled=source_indeed_jobs_api_enabled,
         source_naukri_enabled=source_naukri_enabled,
         source_glassdoor_enabled=source_glassdoor_enabled,
         source_unstop_enabled=source_unstop_enabled,
@@ -509,6 +525,10 @@ def load_config(env_path: Optional[str] = None, load_env_file: bool = True) -> C
         serpapi_key=serpapi_key,
         active_jobs_db_api_key=active_jobs_db_api_key,
         active_jobs_db_rapidapi_host=active_jobs_db_rapidapi_host,
+        linkedin_jobs_api_key=linkedin_jobs_api_key,
+        linkedin_jobs_rapidapi_host=linkedin_jobs_rapidapi_host,
+        indeed_jobs_api_key=indeed_jobs_api_key,
+        indeed_jobs_rapidapi_host=indeed_jobs_rapidapi_host,
         linkedin_client_id=linkedin_client_id,
         linkedin_client_secret=linkedin_client_secret,
         linkedin_access_token=linkedin_access_token,
@@ -552,28 +572,24 @@ def get_config_credential_status(config: Config) -> dict[str, str]:
         status["SOURCE_ACTIVE_JOBS_DB_ENABLED"] = "SET"
 
     # LinkedIn Jobs API
-    if not config.source_linkedin_api_enabled:
-        status["LINKEDIN_CLIENT_ID"] = "SET" if config.linkedin_client_id else "DISABLED"
-        status["LINKEDIN_CLIENT_SECRET"] = "SET" if config.linkedin_client_secret else "DISABLED"
-        status["LINKEDIN_ACCESS_TOKEN"] = "SET" if config.linkedin_access_token else "DISABLED"
-        status["SOURCE_LINKEDIN_API_ENABLED"] = "DISABLED"
+    if not config.source_linkedin_jobs_api_enabled:
+        status["LINKEDIN_JOBS_API_KEY"] = "SET" if config.linkedin_jobs_api_key else "DISABLED"
+        status["LINKEDIN_JOBS_RAPIDAPI_HOST"] = "SET" if config.linkedin_jobs_rapidapi_host else "DISABLED"
+        status["SOURCE_LINKEDIN_JOBS_API_ENABLED"] = "DISABLED"
     else:
-        status["LINKEDIN_CLIENT_ID"] = "SET" if config.linkedin_client_id else "MISSING"
-        status["LINKEDIN_CLIENT_SECRET"] = "SET" if config.linkedin_client_secret else "MISSING"
-        status["LINKEDIN_ACCESS_TOKEN"] = "SET" if config.linkedin_access_token else "MISSING"
-        status["SOURCE_LINKEDIN_API_ENABLED"] = "SET"
+        status["LINKEDIN_JOBS_API_KEY"] = "SET" if config.linkedin_jobs_api_key else "MISSING"
+        status["LINKEDIN_JOBS_RAPIDAPI_HOST"] = "SET" if config.linkedin_jobs_rapidapi_host else "MISSING"
+        status["SOURCE_LINKEDIN_JOBS_API_ENABLED"] = "SET"
 
     # Indeed Jobs API
-    if not config.source_indeed_api_enabled:
-        status["INDEED_CLIENT_ID"] = "SET" if config.indeed_client_id else "DISABLED"
-        status["INDEED_CLIENT_SECRET"] = "SET" if config.indeed_client_secret else "DISABLED"
-        status["INDEED_ACCESS_TOKEN"] = "SET" if config.indeed_access_token else "DISABLED"
-        status["SOURCE_INDEED_API_ENABLED"] = "DISABLED"
+    if not config.source_indeed_jobs_api_enabled:
+        status["INDEED_JOBS_API_KEY"] = "SET" if config.indeed_jobs_api_key else "DISABLED"
+        status["INDEED_JOBS_RAPIDAPI_HOST"] = "SET" if config.indeed_jobs_rapidapi_host else "DISABLED"
+        status["SOURCE_INDEED_JOBS_API_ENABLED"] = "DISABLED"
     else:
-        status["INDEED_CLIENT_ID"] = "SET" if config.indeed_client_id else "MISSING"
-        status["INDEED_CLIENT_SECRET"] = "SET" if config.indeed_client_secret else "MISSING"
-        status["INDEED_ACCESS_TOKEN"] = "SET" if config.indeed_access_token else "MISSING"
-        status["SOURCE_INDEED_API_ENABLED"] = "SET"
+        status["INDEED_JOBS_API_KEY"] = "SET" if config.indeed_jobs_api_key else "MISSING"
+        status["INDEED_JOBS_RAPIDAPI_HOST"] = "SET" if config.indeed_jobs_rapidapi_host else "MISSING"
+        status["SOURCE_INDEED_JOBS_API_ENABLED"] = "SET"
 
     return status
 
