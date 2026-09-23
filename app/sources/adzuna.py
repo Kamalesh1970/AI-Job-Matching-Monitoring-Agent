@@ -145,7 +145,7 @@ class AdzunaJobSource(BaseJobSource):
         return all_jobs, any_success
 
     def fetch_source_jobs(
-        self, keywords: Optional[List[str]] = None, max_pages: int = 2, results_per_page: int = 20
+        self, keywords: Optional[List[str]] = None, max_pages: int = 2, results_per_page: int = 20, **kwargs: Any
     ) -> Any:
         """
         Executes Adzuna fetch across keywords and returns structured SourceResult.
