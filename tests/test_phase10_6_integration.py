@@ -105,6 +105,10 @@ def mock_config():
         source_serpapi_enabled=True,
         source_active_jobs_db_enabled=True,
         active_jobs_db_api_key="test_key",
+        source_linkedin_jobs_api_enabled=True,
+        linkedin_jobs_api_key="test_linkedin_key",
+        source_indeed_jobs_api_enabled=True,
+        indeed_jobs_api_key="test_indeed_key",
         source_naukri_enabled=True,
         source_glassdoor_enabled=True,
         source_unstop_enabled=True,
@@ -176,7 +180,7 @@ def test_registry_dynamic_enable_disable(mock_config):
     enabled_sources = registry.list_enabled_sources(mock_config)
     enabled_ids = {s.source_identifier for s in enabled_sources}
     assert "adzuna" not in enabled_ids
-    assert len(enabled_sources) == 18
+    assert len(enabled_sources) == 20
 
     registry.enable_source("adzuna")
     assert registry.is_source_enabled("adzuna", mock_config) is True
